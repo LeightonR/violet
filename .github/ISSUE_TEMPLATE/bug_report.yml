@@ -1,0 +1,34 @@
+name: Bug report
+description: Report a reproducible Violet problem using dummy text.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: "Please omit private transcripts, recordings, credentials, and personal screenshots. For vulnerabilities, see SECURITY.md."
+  - type: input
+    id: version
+    attributes:
+      label: Violet version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and target application
+      placeholder: "Windows 11; Notepad"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Use a short example with invented text.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true

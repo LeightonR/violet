@@ -1,0 +1,27 @@
+# Local Python environment and bytecode
+.venv/
+.build-venv/
+.audit-venv/
+build/
+dist/
+release/
+wheelhouse/
+.release-tools/
+Violet.exe
+*.spec.bak
+.env
+.env.*
+__pycache__/
+*.py[cod]
+
+# Downloaded speech-model weights and Hugging Face cache metadata
+benchmarks/model-cache/
+
+# Generated benchmark audio (the scripts and JSON results are retained)
+benchmarks/*.wav
+
+# Local runtime and automation noise
+*.log
+*.tmp
+@AutomationLog.txt
+.pytest_cache/

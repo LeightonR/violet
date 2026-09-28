@@ -1,0 +1,3 @@
+# Packaging-only tools. The distributable contains only requirements-runtime.lock.
+PyInstaller==6.22.3
+pip-audit==2.10.1

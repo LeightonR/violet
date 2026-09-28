@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="540" viewBox="0 0 1200 540" role="img" aria-labelledby="title desc">
+  <title id="title">Violet</title>
+  <desc id="desc">A little voice, right where you write. A glossy warm purple microphone beside a softly lit text field.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#251633"/><stop offset=".55" stop-color="#452352"/><stop offset="1" stop-color="#6e386d"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#eda7e8" stop-opacity=".34"/><stop offset="1" stop-color="#eda7e8" stop-opacity="0"/></radialGradient>
+    <linearGradient id="orb" x1=".2" y1="0" x2=".8" y2="1"><stop stop-color="#f0bef9"/><stop offset=".48" stop-color="#c87ce0"/><stop offset="1" stop-color="#a853bf"/></linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2=".1" y2="1"><stop stop-color="#fff" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity=".08"/></linearGradient>
+    <filter id="shadow" x="-80%" y="-80%" width="260%" height="260%"><feDropShadow dx="0" dy="12" stdDeviation="20" flood-color="#10091d" flood-opacity=".4"/></filter>
+  </defs>
+  <rect width="1200" height="540" rx="28" fill="url(#bg)"/>
+  <ellipse cx="925" cy="210" rx="380" ry="320" fill="url(#glow)"/>
+  <path d="M600 520Q720 220 1220 360M530 550Q900 180 1260 220" fill="none" stroke="#f9c5f6" stroke-opacity=".08" stroke-width="2"/>
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <text x="76" y="160" fill="#f7dcff" font-size="25" font-weight="500" letter-spacing="5">MEET YOUR LITTLE VOICE</text>
+    <text x="70" y="278" fill="#fff3ff" font-size="116" font-weight="650" letter-spacing="-5">Violet</text>
+    <text x="78" y="333" fill="#e9c7ee" font-size="29">Right where you write.</text>
+    <g font-size="16" fill="#efcff3"><rect x="77" y="387" width="113" height="35" rx="17.5" fill="#ffffff" fill-opacity=".09"/><text x="96" y="410">CPU only</text><rect x="201" y="387" width="139" height="35" rx="17.5" fill="#ffffff" fill-opacity=".09"/><text x="219" y="410">Local &amp; lovely</text></g>
+    <g filter="url(#shadow)">
+      <rect x="731" y="213" width="397" height="140" rx="25" fill="#fff5ff" fill-opacity=".95"/>
+      <rect x="732" y="214" width="395" height="138" rx="24" fill="none" stroke="#ffffff" stroke-opacity=".65"/>
+      <text x="762" y="270" fill="#76567e" font-size="21">Let your thoughts flow.</text>
+      <rect x="764" y="288" width="2" height="25" rx="1" fill="#ac58c6"/>
+      <circle cx="682" cy="301" r="34" fill="url(#orb)" stroke="#f1c9fa" stroke-width="1.5"/>
+      <ellipse cx="680" cy="284" rx="24" ry="13" fill="url(#glass)" opacity=".5"/>
+      <g fill="none" stroke="#593267" stroke-width="3.4" stroke-linecap="round"><rect x="677" y="287" width="10" height="18" rx="5" fill="#faf0ff" fill-opacity=".45"/><path d="M672 299v3a10 10 0 0 0 20 0v-3M682 312v7m-5 0h10"/></g>
+    </g>
+    <text x="731" y="396" fill="#dfb3e4" font-size="17">Click. Speak. Keep going.</text>
+    <text x="78" y="494" fill="#bf91c9" font-size="14">WINDOWS 10 / 11</text>
+  </g>
+</svg>

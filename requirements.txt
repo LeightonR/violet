@@ -1,0 +1,8 @@
+# Violet deliberately keeps its inference stack local.  No audio or transcript is
+# sent to a service.
+PySide6==6.11.2
+faster-whisper==1.2.1
+scipy==1.14.1
+sounddevice==0.5.3
+uiautomation==2.0.29
+pywin32==311

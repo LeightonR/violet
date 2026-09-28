@@ -1,0 +1,40 @@
+--- faster_whisper/audio.py
++++ faster_whisper/audio.py
+@@
+-import av
+ import numpy as np
+@@
++# VIOLET_CODEC_FREE_PATCH=1
++def _load_pyav_for_file_decoding():
++    try:
++        import av
++    except ImportError as error:
++        raise RuntimeError(
++            "This Violet build accepts in-memory microphone samples only; file decoding is unavailable."
++        ) from error
++    return av
++
++
+ def decode_audio(
+@@
+-    resampler = av.audio.resampler.AudioResampler(
++    av = _load_pyav_for_file_decoding()
++    resampler = av.audio.resampler.AudioResampler(
+@@
+-        frames = _ignore_invalid_frames(frames)
++        frames = _ignore_invalid_frames(frames, av.error.InvalidDataError)
+@@
+-        frames = _group_frames(frames, 500000)
++        frames = _group_frames(frames, 500000, av_module=av)
+@@
+-def _ignore_invalid_frames(frames):
++def _ignore_invalid_frames(frames, invalid_data_error):
+@@
+-        except av.error.InvalidDataError:
++        except invalid_data_error:
+@@
+-def _group_frames(frames, num_samples=None):
+-    fifo = av.audio.fifo.AudioFifo()
++def _group_frames(frames, num_samples=None, av_module=None):
++    av = av_module or _load_pyav_for_file_decoding()
++    fifo = av.audio.fifo.AudioFifo()
