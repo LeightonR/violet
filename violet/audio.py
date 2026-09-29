@@ -6,6 +6,7 @@ import queue
 import threading
 from dataclasses import dataclass
 from math import gcd
+from math import log10
 
 import numpy as np
 import sounddevice as sd
@@ -15,16 +16,21 @@ from scipy.signal import resample_poly
 
 TARGET_SAMPLE_RATE = 16_000
 VAD_WINDOW_SAMPLES = 512
-# Silero's recurrent VAD needs a little neighboring audio to make stable speech
-# decisions.  Four 32 ms frames keep the visual onset bounded to 128 ms while
-# avoiding the context-reset flicker produced by calling the model one frame at
-# a time.
-VAD_ANALYSIS_FRAMES = 4
+# The live meter processes one genuine 32 ms window at a time.  Its small
+# streaming adapter retains Silero's recurrent h/c state and preceding audio,
+# rather than resetting the model state every 128 ms as the batch wrapper does.
+VAD_ANALYSIS_FRAMES = 1
 VAD_ANALYSIS_SAMPLES = VAD_WINDOW_SAMPLES * VAD_ANALYSIS_FRAMES
-# 448 ms bridges normal syllable gaps; combined with a four-frame VAD batch it
-# bounds a silence release at roughly 0.64 s in the live UI rather than making
-# the meter linger for a full second after a phrase.
-VAD_HANGOVER_FRAMES = 14
+# 160 ms bridges ordinary syllable gaps without leaving a visible waveform
+# hanging around after a phrase has genuinely ended.
+VAD_HANGOVER_FRAMES = 5
+
+# A fixed dB scale is deliberately gentler than automatic gain control.  It
+# gives quiet, ordinary, and loud voices distinct visible heights without
+# flattening a phrase into a permanently full bar or learning/persisting user
+# audio levels.
+VOICE_FLOOR_DB = -48.0
+VOICE_CEILING_DB = -8.0
 
 
 _vad_prewarm_lock = threading.Lock()
@@ -118,8 +124,61 @@ def contains_voice_energy(samples: np.ndarray) -> bool:
     return rms >= 0.0008
 
 
+class _StreamingSilero:
+    """One recording's stateful view of faster-whisper's bundled Silero VAD.
+
+    ``faster_whisper.vad.SileroVADModel.__call__`` intentionally initializes
+    its h/c state for a complete offline clip.  Calling it repeatedly for a
+    live meter therefore loses speech context every time.  Violet shares only
+    the immutable ONNX session; each instance below owns new h/c/context so
+    recordings and later transcription never share mutable state.
+
+    The callable fallback is used only by deterministic test doubles.  The
+    packaged model exposes ``.session`` and takes the stateful path.
+    """
+
+    _CONTEXT_SAMPLES = 64
+
+    def __init__(self, model: object) -> None:
+        self._model = model
+        self._session = getattr(model, "session", None)
+        self._h = np.zeros((1, 1, 128), dtype=np.float32)
+        self._c = np.zeros((1, 1, 128), dtype=np.float32)
+        self._context = np.zeros(self._CONTEXT_SAMPLES, dtype=np.float32)
+
+    def probability(self, window: np.ndarray) -> float:
+        window = np.asarray(window, dtype=np.float32).reshape(-1)
+        if len(window) != VAD_WINDOW_SAMPLES:
+            raise ValueError("Silero live window must be exactly 512 samples")
+        if self._session is None:
+            # Test doubles keep the historical callable contract.  Production
+            # uses the session branch, retaining state between 32 ms samples.
+            values = np.asarray(self._model(window), dtype=np.float32).reshape(-1)  # type: ignore[operator]
+            return float(values[-1])
+
+        model_input = np.concatenate((self._context, window)).reshape(1, -1)
+        outputs = self._session.run(
+            None,
+            {"input": model_input, "h": self._h, "c": self._c},
+        )
+        probability, self._h, self._c = outputs
+        self._context = window[-self._CONTEXT_SAMPLES :].copy()
+        return float(np.asarray(probability, dtype=np.float32).reshape(-1)[0])
+
+
+def voice_level(window: np.ndarray) -> float:
+    """Map a VAD-approved voice window to a stable, non-saturating 0..1 level."""
+
+    values = np.asarray(window, dtype=np.float32).reshape(-1)
+    if not len(values):
+        return 0.0
+    rms = float(np.sqrt(np.mean(np.square(values, dtype=np.float64))))
+    db = 20.0 * log10(max(rms, 1e-7))
+    return float(min(1.0, max(0.0, (db - VOICE_FLOOR_DB) / (VOICE_CEILING_DB - VOICE_FLOOR_DB))))
+
+
 class SpeechGate:
-    """Silero-VAD visual gate; it never changes the audio sent to Whisper."""
+    """Streaming Silero visual gate; it never changes audio sent to Whisper."""
 
     def __init__(
         self,
@@ -128,71 +187,73 @@ class SpeechGate:
         hangover_frames: int = VAD_HANGOVER_FRAMES,
         analysis_frames: int = VAD_ANALYSIS_FRAMES,
     ) -> None:
-        if analysis_frames < 1:
-            raise ValueError("analysis_frames must be at least one")
+        if analysis_frames != 1:
+            raise ValueError("the live VAD must process one 32 ms frame at a time")
         if hangover_frames < 0:
             raise ValueError("hangover_frames cannot be negative")
         self._threshold = threshold
         self._release_threshold = min(threshold, max(0.0, release_threshold))
         self._hangover_frames = hangover_frames
-        self._analysis_frames = analysis_frames
-        self._analysis_samples = VAD_WINDOW_SAMPLES * analysis_frames
         self._hangover = 0
-        self._last_speech_level = 0.0
+        self._was_speech = False
         self._pending = np.empty(0, dtype=np.float32)
-        self._model = None
+        self._model: object | None = None
+        self._stream: _StreamingSilero | None = None
+
+    def _probability(self, window: np.ndarray) -> float:
+        if self._model is None:
+            # faster-whisper's bundled Silero ONNX model has no network path
+            # and is constructed only on the meter worker, never PortAudio's
+            # callback.  The session itself may be shared, but this gate's h/c
+            # and context remain private to one recording.
+            self._model = _get_vad_model()
+        if self._stream is None:
+            self._stream = _StreamingSilero(self._model)
+        return self._stream.probability(window)
 
     def process(self, samples: np.ndarray) -> list[tuple[bool, float]]:
-        """Return `(speech_active, visual_level)` for complete 32ms windows.
+        """Return one VAD-gated level per genuine complete 32 ms window."""
 
-        The VAD receives short contextual batches rather than isolated frames.
-        Results still retain per-frame levels, so each waveform bar comes from
-        actual microphone energy only after Silero has accepted it as speech.
-        """
         samples = np.asarray(samples, dtype=np.float32).reshape(-1)
         if not len(samples):
             return []
         self._pending = np.concatenate((self._pending, samples))
-        completed = len(self._pending) // self._analysis_samples * self._analysis_samples
+        completed = len(self._pending) // VAD_WINDOW_SAMPLES * VAD_WINDOW_SAMPLES
         if not completed:
             return []
         batch, self._pending = self._pending[:completed], self._pending[completed:]
-        if self._model is None:
-            # faster-whisper's bundled Silero ONNX model uses no network and is
-            # constructed on the meter thread, never in PortAudio's callback.
-            self._model = _get_vad_model()
-        probabilities = np.asarray(self._model(batch), dtype=np.float32).reshape(-1)
-        windows = batch.reshape(-1, VAD_WINDOW_SAMPLES)
         states: list[tuple[bool, float]] = []
-        for window, probability in zip(windows, probabilities):
+        for window in batch.reshape(-1, VAD_WINDOW_SAMPLES):
+            probability = self._probability(window)
             if probability >= self._threshold:
+                self._was_speech = True
                 self._hangover = self._hangover_frames
-                self._last_speech_level = min(
-                    1.0,
-                    float(np.sqrt(np.mean(np.square(window, dtype=np.float64))) * 12.0),
-                )
-                states.append((True, self._last_speech_level))
-            elif self._hangover and probability >= self._release_threshold:
-                # A lower release threshold avoids visibly dropping the meter
-                # between syllables while preserving the higher threshold for
-                # initially showing it above non-speech noise.
+                states.append((True, voice_level(window)))
+            elif self._was_speech and probability >= self._release_threshold:
                 self._hangover = self._hangover_frames
-                self._last_speech_level = min(
-                    1.0,
-                    float(np.sqrt(np.mean(np.square(window, dtype=np.float64))) * 12.0),
-                )
-                states.append((True, self._last_speech_level))
-            elif self._hangover:
+                states.append((True, voice_level(window)))
+            elif self._was_speech and self._hangover:
+                # A short visual hold prevents a single conservative VAD
+                # result from blanking a running word.  Each real non-speech
+                # frame contributes a zero target, so the renderer eases the
+                # last measured bars away without inventing audio history.
                 self._hangover -= 1
-                # Decay the prior speech envelope; noise is never made into a
-                # visual bar during the short speech hangover.
-                states.append(
-                    (True, self._last_speech_level * self._hangover / max(1, self._hangover_frames))
-                )
+                states.append((True, 0.0))
             else:
-                self._last_speech_level = 0.0
+                self._was_speech = False
+                self._hangover = 0
                 states.append((False, 0.0))
         return states
+
+
+@dataclass(slots=True)
+class _MeterRun:
+    """Immutable ownership for one background visual-meter run."""
+
+    generation: int
+    samples: queue.Queue[np.ndarray | None]
+    stopping: threading.Event
+    sample_rate: int
 
 
 class SpeechMeter(QObject):
@@ -200,21 +261,43 @@ class SpeechMeter(QObject):
 
     speech_level_changed = Signal(float, bool)
     meter_failed = Signal(str)
+    _run_level_changed = Signal(int, float, bool)
+    _run_failed = Signal(int, str)
 
     def __init__(self) -> None:
         super().__init__()
+        self._run_lock = threading.Lock()
+        self._generation = 0
+        self._run: _MeterRun | None = None
         self._queue: queue.Queue[np.ndarray | None] = queue.Queue(maxsize=32)
         self._sample_rate = TARGET_SAMPLE_RATE
         self._thread: threading.Thread | None = None
         self._stopping = threading.Event()
+        # Worker-originating Qt signals are queued back onto this object's GUI
+        # thread.  These forwarding slots reject old generations *there*, so a
+        # late old worker cannot update a new recording after a bounded join.
+        self._run_level_changed.connect(self._forward_run_level)
+        self._run_failed.connect(self._forward_run_failure)
 
     def start(self, sample_rate: int) -> None:
         self.stop()
-        self._sample_rate = sample_rate
-        self._queue = queue.Queue(maxsize=32)
-        self._stopping.clear()
-        self._thread = threading.Thread(target=self._run, name="VioletSpeechMeter", daemon=True)
-        self._thread.start()
+        with self._run_lock:
+            self._generation += 1
+            run = _MeterRun(
+                self._generation,
+                queue.Queue(maxsize=32),
+                threading.Event(),
+                sample_rate,
+            )
+            self._run = run
+            # Compatibility/debug aliases always point to the *current* run;
+            # worker code below never dereferences these mutable attributes.
+            self._queue = run.samples
+            self._sample_rate = run.sample_rate
+            self._stopping = run.stopping
+            self._thread = threading.Thread(target=self._run_loop, args=(run,), name="VioletSpeechMeter", daemon=True)
+            thread = self._thread
+        thread.start()
         self.speech_level_changed.emit(0.0, False)
 
     def prewarm(self) -> None:
@@ -225,48 +308,80 @@ class SpeechMeter(QObject):
     def submit(self, samples: np.ndarray) -> None:
         # Never wait in the callback. Dropping stale meter blocks cannot affect
         # captured audio or transcription because this visual path is separate.
+        with self._run_lock:
+            run = self._run
+        if run is None or run.stopping.is_set():
+            return
         try:
-            self._queue.put_nowait(samples)
+            run.samples.put_nowait(samples)
         except queue.Full:
             try:
-                self._queue.get_nowait()
+                run.samples.get_nowait()
             except queue.Empty:
                 pass
             try:
-                self._queue.put_nowait(samples)
+                run.samples.put_nowait(samples)
             except queue.Full:
                 pass
 
     def stop(self) -> None:
-        thread, self._thread = self._thread, None
-        if thread is None:
+        with self._run_lock:
+            run, thread = self._run, self._thread
+            self._run = None
+            self._thread = None
+        if run is None:
             return
-        self._stopping.set()
+        run.stopping.set()
         try:
-            self._queue.put_nowait(None)
+            run.samples.put_nowait(None)
         except queue.Full:
             pass
-        thread.join(timeout=1.5)
+        if thread is not None:
+            thread.join(timeout=1.5)
         self.speech_level_changed.emit(0.0, False)
 
-    def _run(self) -> None:
+    def _is_current_run(self, run: _MeterRun) -> bool:
+        with self._run_lock:
+            return self._run is run and not run.stopping.is_set()
+
+    def _publish_level(self, run: _MeterRun, level: float, speech_active: bool) -> None:
+        if self._is_current_run(run):
+            self._run_level_changed.emit(run.generation, level, speech_active)
+
+    def _publish_failure(self, run: _MeterRun, detail: str) -> None:
+        if self._is_current_run(run):
+            self._run_failed.emit(run.generation, detail)
+
+    def _forward_run_level(self, generation: int, level: float, speech_active: bool) -> None:
+        with self._run_lock:
+            if self._run is None or self._run.generation != generation or self._run.stopping.is_set():
+                return
+        self.speech_level_changed.emit(level, speech_active)
+
+    def _forward_run_failure(self, generation: int, detail: str) -> None:
+        with self._run_lock:
+            if self._run is None or self._run.generation != generation or self._run.stopping.is_set():
+                return
+        self.meter_failed.emit(detail)
+
+    def _run_loop(self, run: _MeterRun) -> None:
         gate = SpeechGate()
-        while not self._stopping.is_set():
+        while not run.stopping.is_set():
             try:
-                block = self._queue.get(timeout=0.15)
+                block = run.samples.get(timeout=0.15)
             except queue.Empty:
                 continue
             if block is None:
                 return
             try:
-                meter_audio = resample_to_16khz(block, self._sample_rate)
+                meter_audio = resample_to_16khz(block, run.sample_rate)
                 for speech_active, level in gate.process(meter_audio):
-                    self.speech_level_changed.emit(level, speech_active)
+                    self._publish_level(run, level, speech_active)
             except Exception as error:
                 # Meter faults must not compromise the microphone capture or
                 # later full-audio VAD used by transcription.
-                self.speech_level_changed.emit(0.0, False)
-                self.meter_failed.emit(str(error))
+                self._publish_level(run, 0.0, False)
+                self._publish_failure(run, str(error))
                 return
 
 

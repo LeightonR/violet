@@ -6,7 +6,7 @@ import ctypes
 import math
 from collections import deque
 
-from PySide6.QtCore import QAbstractAnimation, QEasingCurve, QPoint, QPointF, QRect, QRectF, QPropertyAnimation, QTimer, Qt, Signal
+from PySide6.QtCore import QElapsedTimer, QEvent, QPoint, QPointF, QRect, QRectF, QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QLinearGradient, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 
@@ -93,11 +93,11 @@ def violet_icon() -> QIcon:
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     gradient = QLinearGradient(8, 6, 56, 58)
-    gradient.setColorAt(0, QColor("#f5e0ff"))
-    gradient.setColorAt(0.52, QColor("#d49ae9"))
-    gradient.setColorAt(1, QColor("#b57bdd"))
+    gradient.setColorAt(0, QColor("#eac8fa"))
+    gradient.setColorAt(0.52, QColor("#dba3ee"))
+    gradient.setColorAt(1, QColor("#aa6ad2"))
     painter.setBrush(gradient)
-    painter.setPen(QPen(QColor("#7ed8e6"), 2))
+    painter.setPen(QPen(QColor("#b46ac9"), 2))
     painter.drawEllipse(QRectF(4, 4, 56, 56))
     painter.setPen(QPen(QColor(255, 255, 255, 190), 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
     painter.drawArc(QRectF(10, 8, 43, 25), 28 * 16, 118 * 16)
@@ -175,6 +175,8 @@ class VioletOverlay(QWidget):
     placement_saved = Signal()
 
     _widths = {"idle": 42, "recording": 158, "transcribing": 84, "ready": 138, "error": 42}
+    _wave_samples = 9
+    _spring_duration_ms = 210
 
     def __init__(self) -> None:
         flags = (
@@ -190,8 +192,12 @@ class VioletOverlay(QWidget):
         self._state = "idle"
         self._message: str | None = None
         self._level = 0.0
+        # `_envelope` contains only measured, VAD-approved 32 ms targets.
+        # `_display_envelope` eases toward those targets between frames; it
+        # never gains samples while paint/frame clocks run.
         self._display_level = 0.0
-        self._envelope: deque[float] = deque([0.0] * 14, maxlen=14)
+        self._envelope: deque[float] = deque([0.0] * self._wave_samples, maxlen=self._wave_samples)
+        self._display_envelope: deque[float] = deque([0.0] * self._wave_samples, maxlen=self._wave_samples)
         self._speech_active = False
         self._phase = 0.0
         self._target_rect: FieldRect | None = None
@@ -206,17 +212,31 @@ class VioletOverlay(QWidget):
         self._normal_press_origin: QPoint | None = None
         self._normal_press_moved = False
         self.resize(self._widths["idle"], 42)
-        self._geometry_animation = QPropertyAnimation(self, b"geometry", self)
-        self._geometry_animation.setDuration(210)
-        # The pill gets one restrained, physical-feeling spring when a
-        # recording begins or ends.  Meter updates never touch this animation.
-        spring = QEasingCurve(QEasingCurve.Type.OutBack)
-        spring.setOvershoot(0.75)
-        self._geometry_animation.setEasingCurve(spring)
-        self._pulse_timer = QTimer(self)
-        self._pulse_timer.setInterval(32)
-        self._pulse_timer.timeout.connect(self._tick)
-        self._pulse_timer.start()
+        # One frame driver owns waveform interpolation, spinner, and the
+        # short lifecycle spring.  A visible native QWindow asks Qt for a
+        # vsync-aligned UpdateRequest; a precise short timer is only a fallback
+        # for non-exposed/offscreen widgets where no native frame callback can
+        # arrive.  No animation loop runs while Violet is hidden or settled.
+        self._frame_clock = QElapsedTimer()
+        self._frame_clock.start()
+        self._last_frame_ms = self._frame_clock.elapsed()
+        self._frame_window = None
+        self._frame_update_pending = False
+        self._frame_waiting_for_paint = False
+        self._frame_native_deferred = False
+        self._native_request_started_ms: int | None = None
+        # QWindow::requestUpdate is normally compositor-paced.  Some raster
+        # Windows paths deliver it early, so this measured lead lets Violet
+        # request early enough for the next refresh without spinning faster
+        # than the screen's reported ceiling.
+        self._native_delivery_lead_ms = 1.0
+        self._frame_fallback = QTimer(self)
+        self._frame_fallback.setSingleShot(True)
+        self._frame_fallback.setTimerType(Qt.TimerType.PreciseTimer)
+        self._frame_fallback.timeout.connect(self._on_fallback_frame)
+        self._spring_start: QRect | None = None
+        self._spring_end: QRect | None = None
+        self._spring_started_ms = 0
         self._apply_no_activate_style()
 
     @property
@@ -231,6 +251,12 @@ class VioletOverlay(QWidget):
     def placement(self) -> RelativePlacement:
         return self._placement
 
+    @property
+    def spring_active(self) -> bool:
+        """Whether the one recording-lifecycle geometry spring is in flight."""
+
+        return self._spring_start is not None
+
     def set_transform_enabled(self, enabled: bool) -> None:
         """Enable an explicit drag-only placement mode without changing dictation."""
 
@@ -238,7 +264,7 @@ class VioletOverlay(QWidget):
         if enabled == self._transform_enabled:
             return
         self._transform_enabled = enabled
-        self._geometry_animation.stop()
+        self._stop_spring()
         self.setCursor(Qt.CursorShape.OpenHandCursor if enabled else Qt.CursorShape.ArrowCursor)
         if not enabled:
             self._save_current_placement()
@@ -300,7 +326,12 @@ class VioletOverlay(QWidget):
         # a compact working state when recording stops.  Other state changes
         # must not restart the spring or make the attachment jitter.
         recording_lifecycle_change = (previous_state == "recording") != (state == "recording")
+        if recording_lifecycle_change or (previous_state != "transcribing" and state == "transcribing"):
+            # A newly visible motion cycle must not consume an arbitrarily old
+            # elapsed interval from when Violet was idle.
+            self._last_frame_ms = self._frame_clock.elapsed()
         self._place(animated=self.isVisible() and recording_lifecycle_change)
+        self._schedule_frame()
         self.update()
 
     def set_level(self, level: float) -> None:
@@ -308,24 +339,24 @@ class VioletOverlay(QWidget):
         self.set_speech_level(level, level > 0.0)
 
     def set_speech_level(self, level: float, speech_active: bool) -> None:
+        had_active_frame = self._needs_frame()
         self._speech_active = speech_active
         if not speech_active:
             self._level = 0.0
             self._display_level = 0.0
-            self._envelope = deque([0.0] * 14, maxlen=14)
+            self._envelope = deque([0.0] * self._wave_samples, maxlen=self._wave_samples)
+            self._display_envelope = deque([0.0] * self._wave_samples, maxlen=self._wave_samples)
             if self._state == "recording":
                 self.update()
             return
         # This method is invoked only from SpeechMeter's fresh, VAD-approved
-        # audio samples.  Keep a light attack/release filter between adjacent
-        # real samples, but never manufacture extra history from the repaint
-        # timer: every bar therefore reflects microphone energy.
+        # 32 ms samples.  Frame pacing may smooth the visible values toward
+        # these targets, but it is prohibited from appending synthetic history.
         self._level = max(0.0, min(1.0, level))
-        smoothing = 0.68 if self._level > self._display_level else 0.30
-        self._display_level += (self._level - self._display_level) * smoothing
-        self._envelope.append(max(0.0, min(1.0, self._display_level)))
-        if self._state == "recording":
-            self.update()
+        self._envelope.append(self._level)
+        if not had_active_frame:
+            self._last_frame_ms = self._frame_clock.elapsed()
+        self._schedule_frame()
 
     def show_for_target(self, rect: FieldRect) -> None:
         target = physical_rect_to_qt(rect)
@@ -342,7 +373,7 @@ class VioletOverlay(QWidget):
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
         if self._transform_enabled and event.button() == Qt.MouseButton.LeftButton:
-            self._geometry_animation.stop()
+            self._stop_spring()
             self._drag_origin = event.globalPosition().toPoint()
             self._drag_start_geometry = QRect(self.geometry())
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
@@ -399,6 +430,207 @@ class VioletOverlay(QWidget):
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
         self._apply_no_activate_style()
+        self._install_frame_window()
+        self._last_frame_ms = self._frame_clock.elapsed()
+        self._schedule_frame()
+
+    def hideEvent(self, event) -> None:  # type: ignore[override]
+        self._stop_frame_driver()
+        super().hideEvent(event)
+
+    def eventFilter(self, watched, event):  # type: ignore[override]
+        if watched is self._frame_window and event.type() == QEvent.Type.UpdateRequest:
+            if self._native_request_started_ms is not None:
+                observed = max(0.0, float(self._frame_clock.elapsed() - self._native_request_started_ms))
+                self._native_delivery_lead_ms = min(8.0, max(0.0, self._native_delivery_lead_ms * 0.75 + observed * 0.25))
+                self._native_request_started_ms = None
+            self._frame_update_pending = False
+            self._run_frame()
+        return super().eventFilter(watched, event)
+
+    def _install_frame_window(self) -> None:
+        """Attach the native frame callback once a top-level handle exists."""
+
+        window = self.windowHandle()
+        if window is self._frame_window:
+            return
+        if self._frame_window is not None:
+            self._frame_window.removeEventFilter(self)
+        self._frame_window = window
+        if window is not None:
+            window.installEventFilter(self)
+
+    def _fallback_interval_ms(self) -> int:
+        """A bounded non-vsync fallback for offscreen/non-exposed widgets only."""
+
+        screen = self.windowHandle().screen() if self.windowHandle() is not None else None
+        refresh = screen.refreshRate() if screen is not None else 0.0
+        return self._fallback_interval_for_refresh(refresh)
+
+    @staticmethod
+    def _refresh_period_ms(refresh: float) -> float | None:
+        """Return a usable display period without imposing a refresh-rate cap.
+
+        Qt documents ``QScreen.refreshRate()`` as advisory rather than a frame
+        clock, so callers still rely on ``QWindow.requestUpdate()`` for actual
+        presentation.  A valid high-refresh report is nevertheless valuable
+        for spacing requests: 360/480/500/540 Hz displays must not silently
+        become a 60 or 250 Hz path.  Reject only values that cannot describe a
+        finite positive period.
+        """
+
+        try:
+            refresh = float(refresh)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(refresh) or refresh <= 0.0:
+            return None
+        period = 1000.0 / refresh
+        return period if math.isfinite(period) and period > 0.0 else None
+
+    @classmethod
+    def _fallback_interval_for_refresh(cls, refresh: float) -> int:
+        """Best-effort timer delay when no exposed native window can update.
+
+        ``QTimer`` accepts integral milliseconds, so one millisecond is the
+        platform precision floor.  This fallback is never used as the regular
+        visible-window clock; it simply avoids reducing an offscreen high-rate
+        display to an arbitrary low cap.
+        """
+
+        period = cls._refresh_period_ms(refresh)
+        if period is None:
+            return 5
+        return max(1, math.ceil(period))
+
+    def _native_frame_interval_ms(self) -> float:
+        """Use refresh only as a ceiling when an early native event is observed.
+
+        QScreen's rate is not treated as a clock.  Qt's UpdateRequest remains
+        the presentation route; this value simply prevents an early raster
+        delivery from scheduling hundreds of redundant paints per second.
+        """
+
+        screen = self.windowHandle().screen() if self.windowHandle() is not None else None
+        refresh = screen.refreshRate() if screen is not None else 0.0
+        return self._refresh_period_ms(refresh) or 16.0
+
+    def _needs_frame(self) -> bool:
+        if not self.isVisible():
+            return False
+        if self._spring_start is not None or self._state == "transcribing":
+            return True
+        if not self._speech_active:
+            return False
+        return any(abs(target - shown) > 0.002 for target, shown in zip(self._envelope, self._display_envelope))
+
+    def _stop_frame_driver(self) -> None:
+        self._frame_fallback.stop()
+        self._frame_update_pending = False
+        self._frame_waiting_for_paint = False
+        self._frame_native_deferred = False
+        self._native_request_started_ms = None
+
+    def _request_native_frame(self, window) -> None:
+        self._frame_update_pending = True
+        self._native_request_started_ms = self._frame_clock.elapsed()
+        window.requestUpdate()
+
+    def _schedule_frame(self) -> None:
+        if not self._needs_frame() or self._frame_update_pending or self._frame_fallback.isActive():
+            return
+        self._install_frame_window()
+        window = self._frame_window
+        if window is not None and window.isExposed():
+            # Qt maps this to a vsync-aligned UpdateRequest where the platform
+            # supports it.  If this raster path has been returning it early,
+            # defer only the *request* by the observed lead; the eventual paint
+            # still follows Qt's native UpdateRequest route.
+            elapsed = float(self._frame_clock.elapsed() - self._last_frame_ms)
+            delay = self._native_frame_interval_ms() - elapsed - self._native_delivery_lead_ms
+            if delay > 0.5:
+                self._frame_native_deferred = True
+                self._frame_fallback.start(max(1, math.ceil(delay)))
+            else:
+                self._request_native_frame(window)
+            return
+        self._frame_native_deferred = False
+        self._frame_fallback.start(self._fallback_interval_ms())
+
+    def _on_fallback_frame(self) -> None:
+        if self._frame_native_deferred:
+            self._frame_native_deferred = False
+            if self._needs_frame():
+                self._schedule_frame()
+            return
+        self._frame_update_pending = False
+        self._run_frame()
+
+    @staticmethod
+    def _ease_out_back(progress: float) -> float:
+        """A compact overshoot spring with no looping or synthetic motion."""
+
+        x = min(1.0, max(0.0, progress)) - 1.0
+        overshoot = 1.276185  # Qt OutBack's normal constant scaled to 0.75.
+        return 1.0 + (overshoot + 1.0) * x * x * x + overshoot * x * x
+
+    def _stop_spring(self) -> None:
+        self._spring_start = None
+        self._spring_end = None
+
+    def _advance_spring(self, now_ms: int) -> bool:
+        start, end = self._spring_start, self._spring_end
+        if start is None or end is None:
+            return False
+        progress = min(1.0, max(0.0, (now_ms - self._spring_started_ms) / self._spring_duration_ms))
+        eased = self._ease_out_back(progress)
+        x = round(start.x() + (end.x() - start.x()) * eased)
+        width = round(start.width() + (end.width() - start.width()) * eased)
+        # The active caret row is invariant throughout the horizontal spring.
+        self.setGeometry(x, end.y(), width, end.height())
+        if progress >= 1.0:
+            self.setGeometry(end)
+            self._stop_spring()
+        return True
+
+    def _advance_waveform(self, elapsed_ms: float) -> bool:
+        if not self._speech_active or elapsed_ms <= 0.0:
+            return False
+        changed = False
+        displayed: list[float] = []
+        for target, shown in zip(self._envelope, self._display_envelope):
+            # Fast attack retains consonants; a moderately slower release gives
+            # a clear fall between voiced samples without a sawtooth burst.
+            tau_ms = 38.0 if target > shown else 82.0
+            amount = 1.0 - math.exp(-elapsed_ms / tau_ms)
+            next_value = shown + (target - shown) * amount
+            if abs(next_value - shown) > 0.0001:
+                changed = True
+            displayed.append(max(0.0, min(1.0, next_value)))
+        self._display_envelope = deque(displayed, maxlen=self._wave_samples)
+        self._display_level = self._display_envelope[-1]
+        return changed
+
+    def _run_frame(self) -> None:
+        if not self.isVisible():
+            self._stop_frame_driver()
+            return
+        now_ms = self._frame_clock.elapsed()
+        elapsed_ms = min(100.0, max(0.0, float(now_ms - self._last_frame_ms)))
+        self._last_frame_ms = now_ms
+        changed = self._advance_spring(now_ms)
+        changed = self._advance_waveform(elapsed_ms) or changed
+        if self._state == "transcribing":
+            self._phase = (self._phase + elapsed_ms * 0.27) % 360.0
+            changed = True
+        if changed:
+            # Request the following native frame only after this update has
+            # actually painted.  Calling requestUpdate here would allow a
+            # coalesced UpdateRequest to outrun QWidget drawing.
+            self._frame_waiting_for_paint = True
+            self.update()
+        elif self._needs_frame():
+            self._schedule_frame()
 
     def nativeEvent(self, event_type, message):  # type: ignore[override]
         # Be explicit: Qt must process the click without ever activating the
@@ -412,28 +644,32 @@ class VioletOverlay(QWidget):
     def paintEvent(self, _event) -> None:  # type: ignore[override]
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
         width, height = self.width(), self.height()
-        body = QRectF(2.0, 2.0, width - 4.0, height - 4.0)
+        edge_width = self._stroke_width(1.0)
+        inset = edge_width / 2.0 + 1.0 / max(1.0, self.devicePixelRatioF())
+        body = QRectF(inset, inset, width - 2.0 * inset, height - 2.0 * inset)
         gradient = QLinearGradient(body.topLeft(), body.bottomRight())
-        gradient.setColorAt(0, QColor("#f5ddff"))
-        gradient.setColorAt(0.34, QColor("#e5b5f2"))
-        gradient.setColorAt(0.68, QColor("#c68cea"))
-        gradient.setColorAt(1, QColor("#b57edd"))
+        gradient.setColorAt(0, QColor("#eac8fa"))
+        gradient.setColorAt(0.34, QColor("#dba3ee"))
+        gradient.setColorAt(0.68, QColor("#bd80e4"))
+        gradient.setColorAt(1, QColor("#aa6ad2"))
         painter.setBrush(gradient)
-        edge = QColor("#79d5e4") if self._state != "error" else QColor("#c85388")
-        painter.setPen(QPen(edge, 1.25))
+        edge = QColor("#b46ac9") if self._state != "error" else QColor("#c85388")
+        painter.setPen(QPen(edge, edge_width))
         painter.drawRoundedRect(body, 20, 20)
 
-        # Airy top highlight and cyan/pearl rim give the little control its
-        # Frutiger-era gloss without turning it into a large dashboard element.
+        # A single lilac rim and white gloss keep the control warm and crisp at
+        # small sizes.  There are no cyan/teal subpixel accents to fringe on a
+        # high-DPI monitor.
         painter.setBrush(QColor(255, 255, 255, 115))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(QRectF(6, 5, width - 12, 14), 8, 8)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor(255, 255, 255, 205), 1.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.setPen(QPen(QColor(255, 255, 255, 205), self._stroke_width(1.0), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         painter.drawArc(QRectF(7, 5, max(20, width - 14), 22), 28 * 16, 128 * 16)
         if self._transform_enabled:
-            painter.setPen(QPen(QColor(61, 32, 86, 90), 1.0, Qt.PenStyle.DotLine))
+            painter.setPen(QPen(QColor(89, 45, 119, 90), self._stroke_width(1.0), Qt.PenStyle.DotLine))
             painter.drawRoundedRect(body.adjusted(4, 4, -4, -4), 16, 16)
         if self._state in {"recording", "transcribing"}:
             self._draw_cancel(painter, 22, 21)
@@ -451,11 +687,30 @@ class VioletOverlay(QWidget):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(QRectF(30, 17, 5, 5))
         painter.end()
+        if self._frame_waiting_for_paint:
+            self._frame_waiting_for_paint = False
+            self._schedule_frame()
+
+    def _stroke_width(self, logical_width: float) -> float:
+        """Round a logical stroke to whole device pixels for neutral AA edges."""
+
+        dpr = max(1.0, self.devicePixelRatioF())
+        return max(1, round(logical_width * dpr)) / dpr
+
+    def _stroke_center(self, logical_coordinate: float, logical_width: float) -> float:
+        """Place a stroke at a whole-pixel or half-pixel center as appropriate."""
+
+        dpr = max(1.0, self.devicePixelRatioF())
+        physical_width = max(1, round(logical_width * dpr))
+        position = logical_coordinate * dpr
+        if physical_width % 2:
+            return (math.floor(position) + 0.5) / dpr
+        return round(position) / dpr
 
     def _draw_mic(self, painter: QPainter, center_x: float, center_y: float) -> None:
         color = QColor("#3d2056") if self._state != "recording" else QColor("#4e2768")
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(color, 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.setPen(QPen(color, self._stroke_width(1.8), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         painter.drawRoundedRect(QRectF(center_x - 3, center_y - 8, 6, 11), 3, 3)
         painter.drawArc(QRectF(center_x - 6, center_y - 3, 12, 10), 0, -180 * 16)
         painter.drawLine(int(center_x), int(center_y + 7), int(center_x), int(center_y + 10))
@@ -465,7 +720,7 @@ class VioletOverlay(QWidget):
         """Draw the explicit discard action used while audio is in flight."""
 
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor("#4e2768"), 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.setPen(QPen(QColor("#4e2768"), self._stroke_width(2.5), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         painter.drawLine(int(center_x - 5), int(center_y - 5), int(center_x + 5), int(center_y + 5))
         painter.drawLine(int(center_x + 5), int(center_y - 5), int(center_x - 5), int(center_y + 5))
 
@@ -476,28 +731,26 @@ class VioletOverlay(QWidget):
         if self._speech_active and waveform is not None:
             painter.save()
             painter.setClipRect(waveform)
-            for index, level in enumerate(self._envelope):
-                # Soft compression keeps loud input inside the fixed 18px meter
-                # while preserving the motion from recent microphone envelopes.
+            bar_width = self._stroke_width(3.0)
+            available = max(0.0, waveform.width() - 8.0)
+            count = min(len(self._display_envelope), max(1, int(available // 6.2) + 1))
+            levels = list(self._display_envelope)[-count:]
+            left = waveform.left() + 4.0
+            right = waveform.right() - 4.0
+            for index, level in enumerate(levels):
+                # The dB-mapped microphone target reaches this point unchanged
+                # except for temporal interpolation.  A linear height mapping
+                # preserves audible loud/quiet differences instead of applying
+                # a second sqrt compression that flattens every spoken phrase.
                 if level <= 0.001:
                     continue
-                height = min(waveform.height() - 1.5, 2.2 + 14.3 * math.sqrt(level))
-                x = waveform.left() + 3.0 + index * 4.35
-                painter.setPen(
-                    QPen(
-                        QColor("#6a3595") if index % 2 else QColor("#2f91a2"),
-                        3.4,
-                        Qt.PenStyle.SolidLine,
-                        Qt.PenCapStyle.RoundCap,
-                    )
-                )
-                painter.drawLine(x, waveform.center().y() - height / 2, x, waveform.center().y() + height / 2)
+                x = (left + right) / 2.0 if count == 1 else left + (right - left) * index / (count - 1)
+                x = self._stroke_center(x, bar_width)
+                height = min(waveform.height() - bar_width, 1.5 + (waveform.height() - 4.0) * level)
+                center_y = self._stroke_center(waveform.center().y(), bar_width)
+                painter.setPen(QPen(QColor("#6d368f"), bar_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+                painter.drawLine(x, center_y - height / 2.0, x, center_y + height / 2.0)
             painter.restore()
-        elif waveform is not None:
-            # A deliberately still, hairline quiet bar makes the listening
-            # lane legible without pretending that silence is speech.
-            painter.setPen(QPen(QColor(95, 57, 132, 120), 1.1, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-            painter.drawLine(waveform.left() + 3, waveform.center().y(), waveform.right() - 3, waveform.center().y())
         if stop is not None:
             painter.setBrush(QColor("#4b2467"))
             painter.setPen(Qt.PenStyle.NoPen)
@@ -544,8 +797,8 @@ class VioletOverlay(QWidget):
 
     def _draw_spinner(self, painter: QPainter) -> None:
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor("#476f96"), 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        angle = int((self._phase * 75) % 360)
+        painter.setPen(QPen(QColor("#744094"), self._stroke_width(2.0), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        angle = int(self._phase % 360)
         painter.drawArc(QRectF(self.width() - 28, 13, 16, 16), angle * 16, 230 * 16)
 
     def _draw_label(self, painter: QPainter, text: str, x: int = 45) -> None:
@@ -556,12 +809,9 @@ class VioletOverlay(QWidget):
         painter.drawText(QRect(x, 4, self.width() - x - 36, 34), Qt.AlignmentFlag.AlignVCenter, text)
 
     def _tick(self) -> None:
-        self._phase += 0.19
-        # Only the transcription spinner needs a clock.  Waveform history is
-        # deliberately advanced by `set_speech_level` on actual VAD-gated
-        # microphone samples, never by this repaint timer.
-        if self._state in {"recording", "transcribing"}:
-            self.update()
+        # Kept as a small app-owned test/render hook.  It advances elapsed-time
+        # interpolation and spring geometry, never microphone history.
+        self._run_frame()
 
     def _target_geometry(self) -> QRect:
         rect = self._target_rect
@@ -583,17 +833,17 @@ class VioletOverlay(QWidget):
     def _place(self, animated: bool) -> None:
         target = self._target_geometry()
         if animated:
-            if self._geometry_animation.state() == QAbstractAnimation.State.Running:
-                current_end = self._geometry_animation.endValue()
-                if isinstance(current_end, QRect) and current_end == target:
-                    return
-            self._geometry_animation.stop()
-            self._geometry_animation.setStartValue(self.geometry())
-            self._geometry_animation.setEndValue(target)
-            self._geometry_animation.start()
+            if self._spring_start is not None and self._spring_end == target:
+                return
+            if self.geometry() == target:
+                self._stop_spring()
+                return
+            self._spring_start = QRect(self.geometry())
+            self._spring_end = QRect(target)
+            self._spring_started_ms = self._frame_clock.elapsed()
+            self._schedule_frame()
         else:
-            if self._geometry_animation.state() == QAbstractAnimation.State.Running:
-                self._geometry_animation.stop()
+            self._stop_spring()
             self.setGeometry(target)
 
     def _apply_no_activate_style(self) -> None:

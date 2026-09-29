@@ -13,6 +13,7 @@ from violet.audio import (
     VAD_HANGOVER_FRAMES,
     VAD_WINDOW_SAMPLES,
     resample_to_16khz,
+    voice_level,
 )
 
 
@@ -69,7 +70,7 @@ class SpeechGateTests(unittest.TestCase):
         self.assertTrue(any(active for active, _level in states))
         self.assertGreater(max(level for _active, level in states), 0.01)
 
-    def test_contextual_batches_bound_onset_and_silence_release(self) -> None:
+    def test_streaming_frames_bound_onset_and_silence_release(self) -> None:
         """The meter is prompt but does not flicker between speech syllables."""
         # Frame zero is speech.  Every later frame is explicit non-speech.  The
         # test feeds the same one-frame cadence used by a normal meter queue.
@@ -87,17 +88,18 @@ class SpeechGateTests(unittest.TestCase):
             if states:
                 emissions.append((frame_number, states))
 
-        # Four contextual VAD windows cap visual speech onset at 128 ms.  The
-        # first non-speech result is emitted at 512 ms of sample cadence (about
-        # 480 ms after the final voiced 32 ms window), bridging a syllable gap
-        # without leaving a conspicuous lingering meter.
-        self.assertEqual(emissions[0][0] * 32, 128)
+        # A retained-state Silero call emits one genuine frame at a time, so
+        # onset is one 32 ms window rather than the old 128 ms batch burst.
+        # Five release frames bridge a tiny syllable gap, then the overlay is
+        # explicitly told to draw nothing.
+        self.assertEqual(emissions[0][0] * 32, 32)
         flattened = [state for _frame, states in emissions for state in states]
         first_false = next(index for index, (active, _level) in enumerate(flattened) if not active)
-        self.assertEqual((first_false + 1) * 32, 512)
+        self.assertEqual((first_false + 1) * 32, (VAD_HANGOVER_FRAMES + 2) * 32)
         self.assertTrue(all(active for active, _level in flattened[:first_false]))
         self.assertEqual(flattened[first_false], (False, 0.0))
-        self.assertTrue(all(size % (VAD_WINDOW_SAMPLES * VAD_ANALYSIS_FRAMES) == 0 for size in model.calls))
+        self.assertEqual(VAD_ANALYSIS_FRAMES, 1)
+        self.assertTrue(all(size == VAD_WINDOW_SAMPLES for size in model.calls))
 
     def test_meter_level_tracks_real_audio_amplitude_not_a_timer_pattern(self) -> None:
         # Silero accepts every frame as speech; only input RMS may now change
@@ -105,7 +107,7 @@ class SpeechGateTests(unittest.TestCase):
         # meter signal forwards to the overlay.
         amplitudes = (0.01, 0.03, 0.06, 0.09)
         model = Probabilities([0.92] * len(amplitudes))
-        gate = SpeechGate(analysis_frames=4)
+        gate = SpeechGate()
         gate._model = model  # type: ignore[attr-defined]
         samples = np.concatenate(
             [np.full(VAD_WINDOW_SAMPLES, amplitude, dtype=np.float32) for amplitude in amplitudes]
@@ -115,7 +117,49 @@ class SpeechGateTests(unittest.TestCase):
         self.assertTrue(all(active for active, _level in states))
         levels = [level for _active, level in states]
         self.assertEqual(levels, sorted(levels))
-        self.assertGreater(levels[-1], levels[0] * 5)
+        self.assertGreater(levels[-1] - levels[0], 0.35)
+        self.assertLess(levels[-1], 0.95, "the fixed voice map must not saturate ordinary speech")
+
+    def test_voice_level_keeps_quiet_normal_and_loud_speech_distinct(self) -> None:
+        windows = [np.full(VAD_WINDOW_SAMPLES, amplitude, dtype=np.float32) for amplitude in (0.01, 0.04, 0.12)]
+        levels = [voice_level(window) for window in windows]
+        self.assertEqual(levels, sorted(levels))
+        self.assertGreater(levels[1] - levels[0], 0.15)
+        self.assertGreater(levels[2] - levels[1], 0.10)
+        self.assertLess(levels[-1], 0.95, "ordinary loud speech must not pin every bar at full height")
+
+    def test_streaming_session_retains_context_but_new_gate_resets_it(self) -> None:
+        class Session:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, np.ndarray]] = []
+
+            def run(self, _unused, feeds: dict[str, np.ndarray]):
+                self.calls.append({key: value.copy() for key, value in feeds.items()})
+                return [np.asarray([0.92], dtype=np.float32), feeds["h"] + 1, feeds["c"] + 2]
+
+        class Model:
+            def __init__(self, session: Session) -> None:
+                self.session = session
+
+        session = Session()
+        model = Model(session)
+        first = np.full(VAD_WINDOW_SAMPLES, 0.02, dtype=np.float32)
+        second = np.full(VAD_WINDOW_SAMPLES, 0.08, dtype=np.float32)
+        gate = SpeechGate()
+        gate._model = model  # type: ignore[attr-defined]
+        gate.process(first)
+        gate.process(second)
+
+        self.assertEqual(len(session.calls), 2)
+        np.testing.assert_array_equal(session.calls[0]["input"][0, :64], np.zeros(64, dtype=np.float32))
+        np.testing.assert_array_equal(session.calls[1]["input"][0, :64], first[-64:])
+        np.testing.assert_array_equal(session.calls[1]["h"], np.ones((1, 1, 128), dtype=np.float32))
+
+        fresh = SpeechGate()
+        fresh._model = model  # type: ignore[attr-defined]
+        fresh.process(second)
+        np.testing.assert_array_equal(session.calls[-1]["input"][0, :64], np.zeros(64, dtype=np.float32))
+        np.testing.assert_array_equal(session.calls[-1]["h"], np.zeros((1, 1, 128), dtype=np.float32))
 
 
 if __name__ == "__main__":

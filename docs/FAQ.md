@@ -30,12 +30,13 @@ the last valid caret position rather than jumping to the center of the box.
 
 ### What does the waveform show?
 
-A thin, still baseline appears while Violet is listening quietly. Thicker,
-rounded bars reflect detected speech. A short hold smooths ordinary pauses
-between syllables; silence and rejected noise return to the baseline. Voice
-detection is a probabilistic model, so music, another nearby voice, or unusual
-noise may still be classified as speech. The waveform is a display, not an audio
-compressor.
+The meter stays blank while Violet is listening quietly. During detected speech,
+nine spaced warm-violet bars reflect the live level. Stateful streaming voice
+detection smooths ordinary pauses between syllables; silence and rejected noise
+clear the bars. Its motion follows elapsed time and the platform's display-update
+cadence where available, so it does not promise one fixed frame rate. Voice
+detection is probabilistic, so music, another nearby voice, or unusual noise may
+still be classified as speech. The meter is a display, not an audio compressor.
 
 ### Does it add punctuation or learn my style?
 

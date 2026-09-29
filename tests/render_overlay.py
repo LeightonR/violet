@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -32,7 +33,9 @@ def save_preview(overlay: VioletOverlay, path: Path) -> None:
         round(source.height() + 2 * margin * dpr),
     )
     canvas.setDevicePixelRatio(dpr)
-    canvas.fill(QColor("#dce9ee"))
+    # Neutral warm gray makes the violet-only rim legible without suggesting
+    # a blue/cyan accent that is not present in the transparent widget.
+    canvas.fill(QColor("#f1edf4"))
     painter = QPainter(canvas)
     painter.drawPixmap(margin, margin, source)
     painter.end()
@@ -48,7 +51,7 @@ def save_spring_sheet(frames: list[QPixmap], path: Path) -> None:
     logical_height = max(frame.height() / dpr for frame in frames) + 2 * margin
     canvas = QPixmap(round(logical_width * dpr), round(logical_height * dpr))
     canvas.setDevicePixelRatio(dpr)
-    canvas.fill(QColor("#dce9ee"))
+    canvas.fill(QColor("#f1edf4"))
     painter = QPainter(canvas)
     x = margin
     for frame in frames:
@@ -56,6 +59,13 @@ def save_spring_sheet(frames: list[QPixmap], path: Path) -> None:
         x += frame.width() / dpr + margin
     painter.end()
     assert canvas.save(str(path)), f"Could not save {path}"
+
+
+def artifact_path(out: Path, stem: str) -> Path:
+    """Allow the multi-DPI renderer to keep every scale's raw PNG separate."""
+
+    suffix = os.environ.get("VIOLET_RENDER_SUFFIX", "")
+    return out / f"{stem}{suffix}.png"
 
 
 def main() -> int:
@@ -67,19 +77,24 @@ def main() -> int:
     overlay.show()
     overlay.set_state("idle")
     overlay._place(animated=False)
-    save_preview(overlay, out / "violet-idle.png")
+    save_preview(overlay, artifact_path(out, "violet-idle"))
 
     overlay.set_state("recording")
-    overlay._geometry_animation.stop()
+    overlay._stop_spring()
     overlay._place(animated=False)
     overlay.set_speech_level(0.0, False)
-    save_preview(overlay, out / "violet-recording-silent.png")
+    save_preview(overlay, artifact_path(out, "violet-recording-silent"))
 
     # These are explicitly supplied, VAD-approved synthetic speech envelopes;
     # no timer generates or repeats bars between them.
     for level in (0.10, 0.42, 0.78, 0.26, 0.92, 0.55, 1.0, 0.68, 0.34, 0.86, 1.0):
         overlay.set_speech_level(level, True)
-    save_preview(overlay, out / "violet-recording-max.png")
+        # Match the live stream's 32 ms VAD target cadence.  Frame pacing may
+        # ease between these targets, but this script never manufactures bars.
+        QTest.qWait(32)
+        app.processEvents()
+    QTest.qWait(16)
+    save_preview(overlay, artifact_path(out, "violet-recording-max"))
 
     # Capture the restrained recording-lifecycle spring as a contact sheet:
     # opening into a live recording and contracting when it becomes Working.
@@ -99,11 +114,11 @@ def main() -> int:
             QTest.qWait(delay)
         app.processEvents()
         frames.append(overlay.grab())
-    save_spring_sheet(frames, out / "violet-recording-spring.png")
+    save_spring_sheet(frames, artifact_path(out, "violet-recording-spring"))
 
-    overlay._geometry_animation.stop()
+    overlay._stop_spring()
     overlay._place(animated=False)
-    save_preview(overlay, out / "violet-transcribing.png")
+    save_preview(overlay, artifact_path(out, "violet-transcribing"))
     overlay.hide()
     return 0
 

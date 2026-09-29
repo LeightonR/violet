@@ -50,10 +50,11 @@ to your taskbar. Closing the panel leaves Violet in the tray.
 
 <p align="center"><img src="artifacts/violet-control-panel.png" alt="Violet control panel with model selection, pause, Transform, startup, and Quit controls" width="390"></p>
 
-The warm orchid gradient and compact microphone stay out of your way. A thin,
-still baseline appears beside the recording control while quiet; thicker rounded
-bars respond to detected speech. The widget holds its position during selection
-and transient caret updates.
+The warm orchid gradient and compact microphone stay out of your way. The meter
+is blank while quiet; nine spaced warm-violet bars respond to detected speech.
+Its motion follows elapsed time and the platform's display-update cadence where
+available, rather than promising one fixed frame rate. The widget holds its
+position during selection and transient caret updates.
 
 ## Your CPU, a sensible model
 

@@ -4,10 +4,10 @@
 
 - Adds an X that discards an active recording or pending result; the separate
   Stop control still finishes dictation.
-- Shows a still hairline while listening quietly, then uses thicker rounded
-  bars only for VAD-approved speech activity.
-- Adds a brief spring transition as the microphone bubble expands and
-  contracts.
+- Leaves the meter blank in silence and uses nine spaced warm-violet bars for
+  stateful-VAD-approved speech activity with improved dynamic range.
+- Adds frame-paced, elapsed-time motion and a brief spring transition as the
+  microphone bubble expands and contracts.
 
 ## 0.1.0 — First public beta
 
