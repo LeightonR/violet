@@ -467,6 +467,7 @@ class VioletController(QObject):
         self._panel = ControlPanel()
         self._recorder = AudioRecorder(settings.input_device)
         self._recorder.level_changed.connect(self._overlay.set_speech_level)
+        self._recorder.meter_failed.connect(self._on_meter_failed)
         self._panel.widget_enabled_changed.connect(self.set_widget_enabled)
         self._panel.startup_enabled_changed.connect(self.set_startup_enabled)
         self._panel.transform_enabled_changed.connect(self.set_transform_enabled)
@@ -493,8 +494,11 @@ class VioletController(QObject):
         self._transform_enabled = False
         self._panel_note = ""
         self._shutdown_complete: bool | None = None
+        self._meter_failure_reported = False
 
         self._overlay.clicked.connect(self.toggle)
+        self._overlay.stop_requested.connect(self._stop_recording)
+        self._overlay.cancel_requested.connect(self.cancel_dictation)
         self._overlay.placement_saved.connect(self._on_placement_saved)
         self._poller = QTimer(self)
         self._poller.setInterval(220)
@@ -630,7 +634,14 @@ class VioletController(QObject):
         self._status_until = 0.0
         self._state = "idle"
         if self._recorder.is_recording:
-            self._recorder.cancel()
+            try:
+                self._recorder.cancel()
+            except Exception:
+                self._panel_note = (
+                    "Recording was discarded, but Violet could not confirm microphone cleanup. "
+                    "Use Quit Violet / release resources if it stays busy."
+                )
+                self._tray.showMessage("Violet", self._panel_note)
         self._overlay.set_speech_level(0.0, False)
         self._overlay.hide()
         self._latest_target = None
@@ -933,14 +944,61 @@ class VioletController(QObject):
                 raise RuntimeError("speech worker stopped")
             self._worker.submit(request_id, clip.samples)
         except Exception as error:
-            self._requests.pop(request_id, None)
             self._on_transcription_failed(request_id, f"Microphone capture failed: {error}")
+
+    def cancel_dictation(self) -> None:
+        """Discard an active capture or pending result without inserting it.
+
+        Whisper inference is intentionally not force-terminated: a late worker
+        signal is harmless because its request identity is removed before the
+        overlay returns to idle. No transcript is copied or shown for recovery.
+        """
+
+        if not self._enabled or self._state not in {"recording", "transcribing"}:
+            return
+        was_recording = self._state == "recording"
+        # Remove first so a queued transcript/failure can never race forward
+        # into insertion or the recovery surface while cancellation cleans up.
+        self._requests.clear()
+        self._recording_target = None
+        self._recording_recovery_only = False
+        self._status_until = 0.0
+        if was_recording and self._demo_text is None:
+            try:
+                self._recorder.cancel()
+            except Exception:
+                # Audio has been detached from insertion and cleared by the
+                # recorder, but do not pretend an unhappy driver was closed.
+                self._tray.showMessage(
+                    "Violet",
+                    "Recording was discarded, but Violet could not confirm microphone cleanup. "
+                    "Choose Quit Violet / release resources if it stays busy.",
+                )
+        self._overlay.set_speech_level(0.0, False)
+        self._state = "idle"
+        self._overlay.set_state("idle")
+        self._poll_focus()
 
     def _on_model_ready(self, model_id: str) -> None:
         self._model_state = "ready"
         self._model_action.setText(f"Local model ready ({model_id})")
+        # VAD belongs to the visual meter, but warming its local ONNX session
+        # here keeps a first dictation click responsive.  It is daemonized and
+        # does not open the microphone or make a network request.
+        self._recorder.prewarm_meter()
         self._tray.showMessage("Violet ready", "Local punctuation and transcription are ready.")
         self._refresh_panel()
+
+    def _on_meter_failed(self, _detail: str) -> None:
+        """Make a failed speech-only visual meter visible without losing audio."""
+
+        if self._meter_failure_reported:
+            return
+        self._meter_failure_reported = True
+        self._tray.showMessage(
+            "Violet",
+            "The live speech meter is unavailable. Dictation recording continues normally.",
+        )
 
     def _on_model_failed(self, message: str) -> None:
         self._model_state = "failed"
@@ -981,6 +1039,8 @@ class VioletController(QObject):
             self._return_to_idle(delay_ms=1_000)
 
     def _on_transcription_failed(self, request_id: int, message: str) -> None:
+        if request_id not in self._requests:
+            return
         self._requests.pop(request_id, None)
         if not self._enabled:
             return
@@ -1050,11 +1110,16 @@ class VioletController(QObject):
             return self._shutdown_complete
         self._poller.stop()
         self._requests.clear()
-        self._recorder.cancel()
+        clean = True
+        try:
+            self._recorder.cancel()
+        except Exception:
+            # Continue closing the UI and worker. `run()` uses its explicit
+            # process-level fallback when graceful native cleanup is uncertain.
+            clean = False
         self._app.removeNativeEventFilter(self._hotkey)
         self._hotkey.close()
         self._instance_endpoint.close()
-        clean = True
         if self._model_setup_worker is not None and self._model_setup_worker.isRunning():
             # A network/verification task cannot be safely killed inside Qt.
             # Bound Quit like inference shutdown; the process-level fallback in

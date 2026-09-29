@@ -7,8 +7,9 @@
 <p align="center"><a href="https://github.com/LeightonR/violet/releases">Download for Windows</a> · <a href="docs/FAQ.md">FAQ</a> · <a href="PRIVACY.md">Privacy</a></p>
 
 Click a text field. Violet appears just to the left of the active text row.
-Click the microphone, speak, then click Stop. Your words arrive in that field
-with model-generated capitalization and punctuation.
+Click the microphone, speak, then click the square Stop control. Your words
+arrive in that field with model-generated capitalization and punctuation. The
+X discards an active recording or pending result.
 
 Violet is an early **beta**. It works with supported Windows accessibility
 controls; unusual editors may need the copy-and-paste fallback. English is the
@@ -36,8 +37,8 @@ setup. No GPU, API key, or cloud transcription subscription is required.
 
 | Control | What it does |
 | --- | --- |
-| Floating microphone | Start recording; click Stop to transcribe and insert. |
-| Ctrl+Alt+Space | Start/stop from the keyboard; unsupported fields use recovery Copy. |
+| Floating microphone | Start recording; X discards; the square Stop control transcribes and inserts. |
+| Ctrl+Alt+Space | Start or finish dictation from the keyboard; unsupported fields use recovery Copy. |
 | Show the microphone beside editable fields | Pause or resume the widget and recording. |
 | Transform position | Drag to set a position relative to the active text row; uncheck to lock it. |
 | Reset position | Restore the default left-side placement. |
@@ -49,9 +50,10 @@ to your taskbar. Closing the panel leaves Violet in the tray.
 
 <p align="center"><img src="artifacts/violet-control-panel.png" alt="Violet control panel with model selection, pause, Transform, startup, and Quit controls" width="390"></p>
 
-The warm orchid gradient and compact microphone stay out of your way. A bounded
-speech waveform appears beside the recording control and disappears for silence.
-The widget holds its position during selection and transient caret updates.
+The warm orchid gradient and compact microphone stay out of your way. A thin,
+still baseline appears beside the recording control while quiet; thicker rounded
+bars respond to detected speech. The widget holds its position during selection
+and transient caret updates.
 
 ## Your CPU, a sensible model
 

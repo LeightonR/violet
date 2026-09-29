@@ -15,6 +15,54 @@ from scipy.signal import resample_poly
 
 TARGET_SAMPLE_RATE = 16_000
 VAD_WINDOW_SAMPLES = 512
+# Silero's recurrent VAD needs a little neighboring audio to make stable speech
+# decisions.  Four 32 ms frames keep the visual onset bounded to 128 ms while
+# avoiding the context-reset flicker produced by calling the model one frame at
+# a time.
+VAD_ANALYSIS_FRAMES = 4
+VAD_ANALYSIS_SAMPLES = VAD_WINDOW_SAMPLES * VAD_ANALYSIS_FRAMES
+# 448 ms bridges normal syllable gaps; combined with a four-frame VAD batch it
+# bounds a silence release at roughly 0.64 s in the live UI rather than making
+# the meter linger for a full second after a phrase.
+VAD_HANGOVER_FRAMES = 14
+
+
+_vad_prewarm_lock = threading.Lock()
+_vad_prewarm_started = False
+
+
+def _get_vad_model():
+    """Load faster-whisper's bundled, local Silero model on demand."""
+
+    from faster_whisper.vad import get_vad_model
+
+    return get_vad_model()
+
+
+def prewarm_speech_vad() -> None:
+    """Start one non-blocking local VAD warm-up after Whisper becomes ready.
+
+    The meter must never make a first click wait for Python/ONNX imports.  This
+    worker has no network path and is deliberately singleton/idempotent; a
+    later recording still reports a clear visual-meter failure if its own VAD
+    call cannot be made.
+    """
+
+    global _vad_prewarm_started
+    with _vad_prewarm_lock:
+        if _vad_prewarm_started:
+            return
+        _vad_prewarm_started = True
+
+    def warm() -> None:
+        try:
+            _get_vad_model()
+        except Exception:
+            # SpeechMeter reports an actionable visual-meter problem if this
+            # remains unavailable when recording actually starts.
+            pass
+
+    threading.Thread(target=warm, name="VioletVADWarmup", daemon=True).start()
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,32 +125,42 @@ class SpeechGate:
         self,
         threshold: float = 0.5,
         release_threshold: float = 0.35,
-        hangover_frames: int = 12,
+        hangover_frames: int = VAD_HANGOVER_FRAMES,
+        analysis_frames: int = VAD_ANALYSIS_FRAMES,
     ) -> None:
+        if analysis_frames < 1:
+            raise ValueError("analysis_frames must be at least one")
+        if hangover_frames < 0:
+            raise ValueError("hangover_frames cannot be negative")
         self._threshold = threshold
         self._release_threshold = min(threshold, max(0.0, release_threshold))
         self._hangover_frames = hangover_frames
+        self._analysis_frames = analysis_frames
+        self._analysis_samples = VAD_WINDOW_SAMPLES * analysis_frames
         self._hangover = 0
         self._last_speech_level = 0.0
         self._pending = np.empty(0, dtype=np.float32)
         self._model = None
 
     def process(self, samples: np.ndarray) -> list[tuple[bool, float]]:
-        """Return `(speech_active, visual_level)` for complete 32ms windows."""
+        """Return `(speech_active, visual_level)` for complete 32ms windows.
+
+        The VAD receives short contextual batches rather than isolated frames.
+        Results still retain per-frame levels, so each waveform bar comes from
+        actual microphone energy only after Silero has accepted it as speech.
+        """
         samples = np.asarray(samples, dtype=np.float32).reshape(-1)
         if not len(samples):
             return []
         self._pending = np.concatenate((self._pending, samples))
-        completed = len(self._pending) // VAD_WINDOW_SAMPLES * VAD_WINDOW_SAMPLES
+        completed = len(self._pending) // self._analysis_samples * self._analysis_samples
         if not completed:
             return []
         batch, self._pending = self._pending[:completed], self._pending[completed:]
         if self._model is None:
             # faster-whisper's bundled Silero ONNX model uses no network and is
             # constructed on the meter thread, never in PortAudio's callback.
-            from faster_whisper.vad import get_vad_model
-
-            self._model = get_vad_model()
+            self._model = _get_vad_model()
         probabilities = np.asarray(self._model(batch), dtype=np.float32).reshape(-1)
         windows = batch.reshape(-1, VAD_WINDOW_SAMPLES)
         states: list[tuple[bool, float]] = []
@@ -141,6 +199,7 @@ class SpeechMeter(QObject):
     """Bounded asynchronous VAD meter used only for Violet's waveform."""
 
     speech_level_changed = Signal(float, bool)
+    meter_failed = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -157,6 +216,11 @@ class SpeechMeter(QObject):
         self._thread = threading.Thread(target=self._run, name="VioletSpeechMeter", daemon=True)
         self._thread.start()
         self.speech_level_changed.emit(0.0, False)
+
+    def prewarm(self) -> None:
+        """Warm the local Silero session once without touching microphone audio."""
+
+        prewarm_speech_vad()
 
     def submit(self, samples: np.ndarray) -> None:
         # Never wait in the callback. Dropping stale meter blocks cannot affect
@@ -198,14 +262,17 @@ class SpeechMeter(QObject):
                 meter_audio = resample_to_16khz(block, self._sample_rate)
                 for speech_active, level in gate.process(meter_audio):
                     self.speech_level_changed.emit(level, speech_active)
-            except Exception:
+            except Exception as error:
                 # Meter faults must not compromise the microphone capture or
                 # later full-audio VAD used by transcription.
                 self.speech_level_changed.emit(0.0, False)
+                self.meter_failed.emit(str(error))
+                return
 
 
 class AudioRecorder(QObject):
     level_changed = Signal(float, bool)
+    meter_failed = Signal(str)
 
     def __init__(self, device: int | None = None) -> None:
         super().__init__()
@@ -214,8 +281,10 @@ class AudioRecorder(QObject):
         self._samples: list[np.ndarray] = []
         self._sample_rate = TARGET_SAMPLE_RATE
         self._lock = threading.Lock()
+        self._recording_generation = 0
         self._meter = SpeechMeter()
         self._meter.speech_level_changed.connect(self.level_changed.emit)
+        self._meter.meter_failed.connect(self.meter_failed.emit)
 
     @property
     def is_recording(self) -> bool:
@@ -226,21 +295,26 @@ class AudioRecorder(QObject):
             return
         with self._lock:
             self._samples = []
+            self._recording_generation += 1
+            generation = self._recording_generation
         self._sample_rate = TARGET_SAMPLE_RATE
         try:
-            self._stream = self._open_stream(TARGET_SAMPLE_RATE)
+            stream = self._open_stream(TARGET_SAMPLE_RATE, generation)
         except sd.PortAudioError:
             # A few USB interfaces reject a 16 kHz hardware stream.  Capture at
             # their native rate and resample in memory when the user stops.
             info = sd.query_devices(self._device, "input")
             native_rate = int(info["default_samplerate"])
-            self._stream = self._open_stream(native_rate)
+            stream = self._open_stream(native_rate, generation)
             self._sample_rate = native_rate
+        with self._lock:
+            self._stream = stream
         self._meter.start(self._sample_rate)
-        self._stream.start()
+        stream.start()
 
     def stop(self) -> AudioClip:
-        stream, self._stream = self._stream, None
+        with self._lock:
+            stream, self._stream = self._stream, None
         if stream is not None:
             try:
                 stream.stop()
@@ -253,21 +327,73 @@ class AudioRecorder(QObject):
         return AudioClip(resample_to_16khz(samples, self._sample_rate), TARGET_SAMPLE_RATE)
 
     def cancel(self) -> None:
-        if self._stream is not None:
-            self.stop()
+        """Release capture and discard its PCM without decoding or resampling.
 
-    def _open_stream(self, sample_rate: int) -> sd.InputStream:
+        This path backs the visible X control.  It must not route through
+        ``stop()``, because normal completion concatenates/resamples audio for
+        Whisper.  Detaching the stream first also prevents a callback from
+        being treated as an active recording while cleanup runs.
+        """
+
+        # Serialize detachment with PortAudio's callback. A callback that
+        # arrives after this block sees no active stream and returns before it
+        # can repopulate discarded PCM or the visual-meter queue.
+        with self._lock:
+            stream, self._stream = self._stream, None
+            self._recording_generation += 1
+        cleanup_error: Exception | None = None
+        if stream is not None:
+            try:
+                stream.stop()
+            except Exception as error:
+                cleanup_error = error
+            try:
+                stream.close()
+            except Exception as error:
+                cleanup_error = cleanup_error or error
+        try:
+            self._meter.stop()
+        except Exception as error:
+            cleanup_error = cleanup_error or error
+        finally:
+            # Clear even when a driver reports a stop/close problem. Audio is
+            # never persisted, concatenated, resampled, or handed to Whisper.
+            with self._lock:
+                self._samples = []
+        if cleanup_error is not None:
+            raise cleanup_error
+
+    def prewarm_meter(self) -> None:
+        """Prepare the local speech meter without opening an input device."""
+
+        self._meter.prewarm()
+
+    def _open_stream(self, sample_rate: int, generation: int) -> sd.InputStream:
         return sd.InputStream(
             device=self._device,
             samplerate=sample_rate,
             channels=1,
             dtype="float32",
             blocksize=0,
-            callback=self._callback,
+            callback=lambda indata, frames, time_info, status: self._callback(
+                indata, frames, time_info, status, generation
+            ),
         )
 
-    def _callback(self, indata: np.ndarray, _frames: int, _time_info, _status) -> None:
+    def _callback(
+        self,
+        indata: np.ndarray,
+        _frames: int,
+        _time_info,
+        _status,
+        generation: int | None = None,
+    ) -> None:
         block = np.asarray(indata[:, 0], dtype=np.float32).copy()
         with self._lock:
+            if self._stream is None or (generation is not None and generation != self._recording_generation):
+                return
             self._samples.append(block)
-        self._meter.submit(block)
+            # This non-blocking queue operation stays inside the same small
+            # lock so cancel cannot detach between retaining PCM and sending a
+            # stale visual-meter block.
+            self._meter.submit(block)

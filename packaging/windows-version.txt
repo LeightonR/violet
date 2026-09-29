@@ -14,11 +14,11 @@ VSVersionInfo(
       StringTable('040904B0', [
         StringStruct('CompanyName', 'Violet contributors'),
         StringStruct('FileDescription', 'Violet local desktop dictation'),
-        StringStruct('FileVersion', '0.1.0'),
+        StringStruct('FileVersion', '0.1.1'),
         StringStruct('InternalName', 'Violet'),
         StringStruct('OriginalFilename', 'Violet.exe'),
         StringStruct('ProductName', 'Violet'),
-        StringStruct('ProductVersion', '0.1.0')
+        StringStruct('ProductVersion', '0.1.1')
       ])
     ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])

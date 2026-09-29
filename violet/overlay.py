@@ -6,7 +6,7 @@ import ctypes
 import math
 from collections import deque
 
-from PySide6.QtCore import QEasingCurve, QPoint, QRect, QRectF, QPropertyAnimation, QTimer, Qt, Signal
+from PySide6.QtCore import QAbstractAnimation, QEasingCurve, QPoint, QPointF, QRect, QRectF, QPropertyAnimation, QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QLinearGradient, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 
@@ -170,9 +170,11 @@ def _placement_rect(rect: FieldRect) -> PlacementRect:
 
 class VioletOverlay(QWidget):
     clicked = Signal()
+    cancel_requested = Signal()
+    stop_requested = Signal()
     placement_saved = Signal()
 
-    _widths = {"idle": 42, "recording": 158, "transcribing": 174, "ready": 138, "error": 42}
+    _widths = {"idle": 42, "recording": 158, "transcribing": 84, "ready": 138, "error": 42}
 
     def __init__(self) -> None:
         flags = (
@@ -205,8 +207,12 @@ class VioletOverlay(QWidget):
         self._normal_press_moved = False
         self.resize(self._widths["idle"], 42)
         self._geometry_animation = QPropertyAnimation(self, b"geometry", self)
-        self._geometry_animation.setDuration(170)
-        self._geometry_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._geometry_animation.setDuration(210)
+        # The pill gets one restrained, physical-feeling spring when a
+        # recording begins or ends.  Meter updates never touch this animation.
+        spring = QEasingCurve(QEasingCurve.Type.OutBack)
+        spring.setOvershoot(0.75)
+        self._geometry_animation.setEasingCurve(spring)
         self._pulse_timer = QTimer(self)
         self._pulse_timer.setInterval(32)
         self._pulse_timer.timeout.connect(self._tick)
@@ -274,8 +280,12 @@ class VioletOverlay(QWidget):
         self.placement_saved.emit()
 
     def set_target_rect(self, rect: FieldRect | None) -> None:
-        self._target_rect = physical_rect_to_qt(rect) if rect else None
-        if rect is not None:
+        target = physical_rect_to_qt(rect) if rect else None
+        changed = target != self._target_rect
+        self._target_rect = target
+        # A repeated caret poll is a no-op.  In particular, it must not cancel
+        # a recording lifecycle spring while the same row remains active.
+        if target is not None and changed:
             self._place(animated=False)
 
     def set_state(self, state: str, message: str | None = None) -> None:
@@ -283,9 +293,14 @@ class VioletOverlay(QWidget):
             raise ValueError(f"Unknown overlay state: {state}")
         if self._state == state and self._message == message:
             return
+        previous_state = self._state
         self._state = state
         self._message = message
-        self._place(animated=self.isVisible())
+        # A recording begins as the orb opens into a pill, then contracts into
+        # a compact working state when recording stops.  Other state changes
+        # must not restart the spring or make the attachment jitter.
+        recording_lifecycle_change = (previous_state == "recording") != (state == "recording")
+        self._place(animated=self.isVisible() and recording_lifecycle_change)
         self.update()
 
     def set_level(self, level: float) -> None:
@@ -301,7 +316,14 @@ class VioletOverlay(QWidget):
             if self._state == "recording":
                 self.update()
             return
+        # This method is invoked only from SpeechMeter's fresh, VAD-approved
+        # audio samples.  Keep a light attack/release filter between adjacent
+        # real samples, but never manufacture extra history from the repaint
+        # timer: every bar therefore reflects microphone energy.
         self._level = max(0.0, min(1.0, level))
+        smoothing = 0.68 if self._level > self._display_level else 0.30
+        self._display_level += (self._level - self._display_level) * smoothing
+        self._envelope.append(max(0.0, min(1.0, self._display_level)))
         if self._state == "recording":
             self.update()
 
@@ -362,14 +384,14 @@ class VioletOverlay(QWidget):
         moved = self._normal_press_moved
         self._normal_press_origin = None
         self._normal_press_moved = False
-        if (
-            event.button() == Qt.MouseButton.LeftButton
-            and began_here
-            and not moved
-            and self.rect().contains(event.position().toPoint())
-            and self._state != "transcribing"
-        ):
-            self.clicked.emit()
+        if event.button() == Qt.MouseButton.LeftButton and began_here and not moved and self.rect().contains(event.position().toPoint()):
+            action = self._normal_click_action(event.position())
+            if action == "cancel":
+                self.cancel_requested.emit()
+            elif action == "stop":
+                self.stop_requested.emit()
+            elif action == "toggle":
+                self.clicked.emit()
             event.accept()
             return
         event.ignore()
@@ -413,13 +435,15 @@ class VioletOverlay(QWidget):
         if self._transform_enabled:
             painter.setPen(QPen(QColor(61, 32, 86, 90), 1.0, Qt.PenStyle.DotLine))
             painter.drawRoundedRect(body.adjusted(4, 4, -4, -4), 16, 16)
-        self._draw_mic(painter, 22, 21)
+        if self._state in {"recording", "transcribing"}:
+            self._draw_cancel(painter, 22, 21)
+        else:
+            self._draw_mic(painter, 22, 21)
 
         if self._state == "recording":
             self._draw_recording(painter)
         elif self._state == "transcribing":
             self._draw_spinner(painter)
-            self._draw_label(painter, self._message or "Shaping words")
         elif self._state == "ready":
             self._draw_label(painter, self._message or "Text ready")
         elif self._state == "error":
@@ -437,31 +461,86 @@ class VioletOverlay(QWidget):
         painter.drawLine(int(center_x), int(center_y + 7), int(center_x), int(center_y + 10))
         painter.drawLine(int(center_x - 4), int(center_y + 10), int(center_x + 4), int(center_y + 10))
 
+    def _draw_cancel(self, painter: QPainter, center_x: float, center_y: float) -> None:
+        """Draw the explicit discard action used while audio is in flight."""
+
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor("#4e2768"), 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.drawLine(int(center_x - 5), int(center_y - 5), int(center_x + 5), int(center_y + 5))
+        painter.drawLine(int(center_x + 5), int(center_y - 5), int(center_x - 5), int(center_y + 5))
+
     def _draw_recording(self, painter: QPainter) -> None:
         # A compact, familiar speaking waveform. It has a fixed clip region so
         # neither live meter nor animation can overlap the mic or stop control.
-        waveform = QRectF(48, 12, 62, 18)
-        if self._speech_active:
+        waveform, stop = self._recording_layout()
+        if self._speech_active and waveform is not None:
             painter.save()
             painter.setClipRect(waveform)
             for index, level in enumerate(self._envelope):
                 # Soft compression keeps loud input inside the fixed 18px meter
                 # while preserving the motion from recent microphone envelopes.
-                height = min(waveform.height() - 1.5, 3.2 + 13.5 * math.sqrt(level))
+                if level <= 0.001:
+                    continue
+                height = min(waveform.height() - 1.5, 2.2 + 14.3 * math.sqrt(level))
                 x = waveform.left() + 3.0 + index * 4.35
                 painter.setPen(
                     QPen(
                         QColor("#6a3595") if index % 2 else QColor("#2f91a2"),
-                        2.8,
+                        3.4,
                         Qt.PenStyle.SolidLine,
                         Qt.PenCapStyle.RoundCap,
                     )
                 )
                 painter.drawLine(x, waveform.center().y() - height / 2, x, waveform.center().y() + height / 2)
             painter.restore()
-        painter.setBrush(QColor("#4b2467"))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(QRectF(self.width() - 28, 15, 12, 12), 3, 3)
+        elif waveform is not None:
+            # A deliberately still, hairline quiet bar makes the listening
+            # lane legible without pretending that silence is speech.
+            painter.setPen(QPen(QColor(95, 57, 132, 120), 1.1, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.drawLine(waveform.left() + 3, waveform.center().y(), waveform.right() - 3, waveform.center().y())
+        if stop is not None:
+            painter.setBrush(QColor("#4b2467"))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(stop, 3, 3)
+
+    def _recording_layout(self) -> tuple[QRectF | None, QRectF | None]:
+        """Return only controls that fit beside the untouched mic during spring.
+
+        While the orb opens, it can be as narrow as the idle 42px circle.  The
+        mic occupies the left 42px, so stop/wave controls appear only once they
+        have a separate clipped lane; they never flash over the glyph.
+        """
+
+        meter_left = 48.0
+        meter_right = min(110.0, float(self.width() - 6))
+        stop: QRectF | None = None
+        candidate_stop = QRectF(self.width() - 28, 15, 12, 12)
+        if candidate_stop.left() >= 48.0:
+            stop = candidate_stop
+            meter_right = min(meter_right, stop.left() - 6.0)
+        waveform = None
+        if meter_right - meter_left >= 7.0:
+            waveform = QRectF(meter_left, 12, meter_right - meter_left, 18)
+        return waveform, stop
+
+    @staticmethod
+    def _cancel_hit_rect() -> QRectF:
+        # Larger than the painted X but safely contained inside the 42px mic
+        # lane. The waveform begins at x=48, so this can never steal Stop.
+        return QRectF(12, 11, 20, 20)
+
+    def _normal_click_action(self, position: QPointF) -> str | None:
+        """Map a stationary, overlay-originated click to one explicit action."""
+
+        if self._state in {"recording", "transcribing"}:
+            if self._cancel_hit_rect().contains(position):
+                return "cancel"
+            if self._state == "recording":
+                _waveform, stop = self._recording_layout()
+                if stop is not None and stop.adjusted(-3, -3, 3, 3).contains(position):
+                    return "stop"
+            return None
+        return "toggle"
 
     def _draw_spinner(self, painter: QPainter) -> None:
         painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -478,12 +557,9 @@ class VioletOverlay(QWidget):
 
     def _tick(self) -> None:
         self._phase += 0.19
-        # Attack fast enough to feel live; release slower so ordinary syllable
-        # gaps remain smooth. This only draws a meter—captured audio is untouched.
-        smoothing = 0.43 if self._level > self._display_level else 0.14
-        self._display_level += (self._level - self._display_level) * smoothing
-        if self._speech_active:
-            self._envelope.append(max(0.0, min(1.0, self._display_level)))
+        # Only the transcription spinner needs a clock.  Waveform history is
+        # deliberately advanced by `set_speech_level` on actual VAD-gated
+        # microphone samples, never by this repaint timer.
         if self._state in {"recording", "transcribing"}:
             self.update()
 
@@ -507,11 +583,17 @@ class VioletOverlay(QWidget):
     def _place(self, animated: bool) -> None:
         target = self._target_geometry()
         if animated:
+            if self._geometry_animation.state() == QAbstractAnimation.State.Running:
+                current_end = self._geometry_animation.endValue()
+                if isinstance(current_end, QRect) and current_end == target:
+                    return
             self._geometry_animation.stop()
             self._geometry_animation.setStartValue(self.geometry())
             self._geometry_animation.setEndValue(target)
             self._geometry_animation.start()
         else:
+            if self._geometry_animation.state() == QAbstractAnimation.State.Running:
+                self._geometry_animation.stop()
             self.setGeometry(target)
 
     def _apply_no_activate_style(self) -> None:

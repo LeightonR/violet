@@ -1,4 +1,4 @@
-Violet 0.1.0 installs a local Windows desktop dictation application.
+Violet 0.1.1 installs a local Windows desktop dictation application.
 
 This package is unsigned. Verify the published SHA-256 values before installing
 it. The installer does not include speech models, does not copy an existing

@@ -302,7 +302,7 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Release privacy scan failed before archive creation.'
 }
 
-$portableZip = Join-Path $releaseRoot 'Violet-0.1.0-win64-portable.zip'
+$portableZip = Join-Path $releaseRoot 'Violet-0.1.1-win64-portable.zip'
 Compress-Archive -Path (Join-Path $bundleRoot '*') -DestinationPath $portableZip -CompressionLevel Optimal -Force
 
 if (-not $SkipInstaller) {
@@ -326,7 +326,7 @@ Invoke-Checked -Description 'Writing release file SHA-256 manifest' -Action {
     & $buildPython $metadataScript artifact-manifest --directory $releaseRoot --output (Join-Path $releaseRoot 'artifact-manifest.json')
 }
 $sumTargets = @($portableZip, (Join-Path $bundleRoot 'Violet.exe')) | Where-Object { Test-Path -LiteralPath $_ }
-$installer = Join-Path $releaseRoot 'Violet-0.1.0-win64-setup.exe'
+$installer = Join-Path $releaseRoot 'Violet-0.1.1-win64-setup.exe'
 if (Test-Path -LiteralPath $installer) { $sumTargets += $installer }
 $sums = foreach ($target in $sumTargets) {
     $hash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()

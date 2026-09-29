@@ -1,5 +1,5 @@
 #define MyAppName "Violet"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.1"
 #define MyAppId "{{1EA81F38-ACB3-4300-9B68-46D1E34D31F5}"
 #ifndef BundleDir
   #define BundleDir "..\\dist\\Violet"
@@ -24,7 +24,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 OutputDir={#OutputDir}
-OutputBaseFilename=Violet-0.1.0-win64-setup
+OutputBaseFilename=Violet-0.1.1-win64-setup
 SetupIconFile={#SourceRoot}\Violet.ico
 UninstallDisplayIcon={app}\Violet.exe
 LicenseFile={#SourceRoot}\LICENSE
@@ -32,8 +32,8 @@ InfoBeforeFile={#SourceRoot}\packaging\installer-information.txt
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-VersionInfoVersion=0.1.0.0
-VersionInfoProductVersion=0.1.0
+VersionInfoVersion=0.1.1.0
+VersionInfoProductVersion=0.1.1
 DisableWelcomePage=no
 DisableDirPage=yes
 
@@ -60,7 +60,7 @@ Filename: "{app}\Violet.exe"; Parameters: "--control-panel"; Description: "Open 
 function InitializeSetup(): Boolean;
 begin
   if not IsX64 then begin
-    MsgBox('Violet 0.1.0 requires 64-bit Windows 10 version 1809 or Windows 11.', mbError, MB_OK);
+    MsgBox('Violet 0.1.1 requires 64-bit Windows 10 version 1809 or Windows 11.', mbError, MB_OK);
     Result := False;
   end else begin
     Result := True;

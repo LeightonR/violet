@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1 — Voice-driven motion
+
+- Adds an X that discards an active recording or pending result; the separate
+  Stop control still finishes dictation.
+- Shows a still hairline while listening quietly, then uses thicker rounded
+  bars only for VAD-approved speech activity.
+- Adds a brief spring transition as the microphone bubble expands and
+  contracts.
+
 ## 0.1.0 — First public beta
 
 - CPU-only local English dictation with punctuation and capitalization.

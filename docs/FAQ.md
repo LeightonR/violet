@@ -28,12 +28,14 @@ uncheck Transform. That relative alignment and gap follow other inputs.
 **Reset position** restores the default. During text selection Violet holds
 the last valid caret position rather than jumping to the center of the box.
 
-### Why does the waveform disappear?
+### What does the waveform show?
 
-Only detected speech is shown. A short hold smooths ordinary pauses between
-syllables; silence and rejected noise have no waveform. Voice detection is a
-probabilistic model, so music, another nearby voice, or unusual noise may still
-be classified as speech. The waveform is a display, not an audio compressor.
+A thin, still baseline appears while Violet is listening quietly. Thicker,
+rounded bars reflect detected speech. A short hold smooths ordinary pauses
+between syllables; silence and rejected noise return to the baseline. Voice
+detection is a probabilistic model, so music, another nearby voice, or unusual
+noise may still be classified as speech. The waveform is a display, not an audio
+compressor.
 
 ### Does it add punctuation or learn my style?
 
@@ -44,9 +46,10 @@ history. The initial release is configured for English dictation.
 
 ### Why isn't transcription instantaneous?
 
-Violet records until you click Stop, then transcribes the utterance. Smaller
-models finish faster on modest CPUs; larger models can improve accuracy but
-need more memory and compute. CPU detection provides a practical starting
+Violet records until you click the square Stop control, then transcribes the
+utterance. The X discards the current recording or pending result instead.
+Smaller models finish faster on modest CPUs; larger models can improve accuracy
+but need more memory and compute. CPU detection provides a practical starting
 point, not a guarantee that one model is best for every speaker or workload.
 
 ### How do I stop it using resources?

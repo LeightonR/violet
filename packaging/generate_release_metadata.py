@@ -87,15 +87,15 @@ def spdx_sbom(lock: Path, output: Path, licenses_dir: Path) -> None:
         "spdxVersion": "SPDX-2.3",
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
-        "name": "Violet-runtime-0.1.0",
-        "documentNamespace": "https://github.com/LeightonR/violet/releases/tag/v0.1.0/sbom",
+        "name": "Violet-runtime-0.1.1",
+        "documentNamespace": "https://github.com/LeightonR/violet/releases/tag/v0.1.1/sbom",
         "creationInfo": {"creators": ["Tool: Violet packaging metadata"], "created": _source_date()},
         "documentDescribes": ["SPDXRef-Package-Violet-runtime"],
         "packages": [
             {
                 "SPDXID": "SPDXRef-Package-Violet-runtime",
                 "name": "Violet",
-                "versionInfo": "0.1.0",
+                "versionInfo": "0.1.1",
                 "downloadLocation": "NOASSERTION",
                 "filesAnalyzed": False,
                 "licenseConcluded": "NOASSERTION",
