@@ -4,7 +4,7 @@
 
 <p align="center">Windows 10/11 x64 · CPU only · Offline after setup · No account · MIT</p>
 
-<p align="center"><a href="https://github.com/LeightonR/violet/releases">Download for Windows</a> · <a href="docs/FAQ.md">FAQ</a> · <a href="PRIVACY.md">Privacy</a></p>
+<p align="center"><a href="https://github.com/LeightonR/violet/releases/download/v0.1.1/Violet-0.1.1-win64-setup.exe"><strong>Download Violet 0.1.1 for Windows</strong></a> · <a href="https://github.com/LeightonR/violet/releases/download/v0.1.1/Violet-0.1.1-win64-portable.zip">Portable ZIP</a> · <a href="docs/FAQ.md">FAQ</a> · <a href="PRIVACY.md">Privacy</a></p>
 
 Click a text field. Violet appears just to the left of the active text row.
 Click the microphone, speak, then click the square Stop control. Your words
@@ -17,8 +17,9 @@ initial dictation language.
 
 ## Install
 
-1. Open [Releases](https://github.com/LeightonR/violet/releases) and download the Windows x64 Setup
-   executable. A portable ZIP is also provided. No Python installation is needed.
+1. Download [Violet 0.1.1 Setup](https://github.com/LeightonR/violet/releases/download/v0.1.1/Violet-0.1.1-win64-setup.exe)
+   for Windows x64. A [portable ZIP](https://github.com/LeightonR/violet/releases/download/v0.1.1/Violet-0.1.1-win64-portable.zip)
+   is also provided; extract the entire ZIP before launching. No Python installation is needed.
 2. Run Setup as your normal user. It installs Violet for your account, adds
    shortcuts, and enables startup at sign-in by default.
 3. Open Violet. Its first-run setup detects your CPU and memory and recommends
@@ -26,12 +27,25 @@ initial dictation language.
    stored locally and reused on later launches.
 4. Focus an editable field and click the violet microphone to dictate.
 
-The first release is unsigned. Verify the release checksum if Windows shows
-an unknown-publisher warning. See [Security](SECURITY.md) for details.
+Updating? Quit Violet and run the new Setup. Your settings, relative placement,
+and downloaded models are preserved.
+
+The current release is unsigned. Verify the [release checksums](https://github.com/LeightonR/violet/releases/download/v0.1.1/SHA256SUMS.txt)
+if Windows shows an unknown-publisher warning. See [Security](SECURITY.md) for details.
 
 **Requirements:** Windows 10 version 1809 or later / Windows 11, x64 CPU with
 SSE4.1, microphone, space for the app and selected model, and internet for model
 setup. No GPU, API key, or cloud transcription subscription is required.
+
+## New in 0.1.1: tiny bubble, big voice
+
+<p align="center"><img src="docs/images/violet-011-launch.png" alt="Violet 0.1.1 — Tiny bubble. Big voice. Think it. Say it. Keep going." width="800"></p>
+
+The warm-purple bubble now springs open into a clearer, more responsive speaking
+meter. Quiet listening shows rounded dots; your voice grows them into thicker,
+taller bars. An X lets you discard a thought, while the square Stop button
+finishes and inserts it. See the [release notes](https://github.com/LeightonR/violet/releases/tag/v0.1.1)
+and [changelog](CHANGELOG.md) for the fixes and checks behind the polish.
 
 ## Small controls, useful details
 
@@ -114,6 +128,10 @@ integration fixtures use dummy text rather than personal conversations.
 Bug reports are welcome. Include your Violet version, Windows version,
 application name, and reproduction steps with dummy text. Leave recordings,
 private transcripts, credentials, and personal screenshots out of public issues.
+
+Want to share Violet? The [launch card](docs/images/violet-011-launch.png) and
+[editable SVG](docs/images/violet-011-launch.svg) are ready to use. Link people to
+the [official release](https://github.com/LeightonR/violet/releases/tag/v0.1.1).
 
 ## License and acknowledgments
 

@@ -1,14 +1,24 @@
 # Changelog
 
-## 0.1.1 — Voice-driven motion
+## 0.1.1 — Tiny bubble. Big voice.
 
 - Adds an X that discards an active recording or pending result; the separate
   Stop control still finishes dictation.
-- Shows nine small rounded dots in silence, growing into thicker, taller
+- Shows nine clearly visible rounded square dots in silence, growing into thicker, taller
   warm-violet bars for detected speech. Increased visual sensitivity keeps quiet
   speech visible while preserving headroom for louder syllables.
 - Adds frame-paced, elapsed-time motion and a brief spring transition as the
   microphone bubble expands and contracts.
+- Retains voice-detector state across audio frames and advances waveform history
+  only with fresh measurements, reducing phrase flicker and repeated patterns.
+- Isolates old meter workers from new recordings and ignores late results after
+  cancellation. Cancelling discards audio without resampling it.
+- Uses warm violet throughout the widget, with device-pixel-aligned drawing,
+  bounded controls, and no blue/cyan ring. Quiet, settled states stop animating.
+- Strengthens integration coverage for the separate Stop and Cancel controls.
+- Keeps completed text in recovery Copy if the Windows insertion boundary raises
+  an unexpected error, instead of allowing it to disappear silently.
+- Refreshes the launch graphics, installation links, update instructions, and FAQ.
 
 ## 0.1.0 — First public beta
 

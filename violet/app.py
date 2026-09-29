@@ -1028,7 +1028,19 @@ class VioletController(QObject):
             self._tray.showMessage("Violet kept text ready", "This field needs manual Copy.")
             self._return_to_idle(delay_ms=1_000)
             return
-        result = insert_at_original_target(self._focus, target, transcript)
+        try:
+            result = insert_at_original_target(self._focus, target, transcript)
+        except Exception:
+            # UI Automation and SendInput are external Windows boundaries.  A
+            # provider can disappear or reject a call between the identity
+            # check and injection; a completed nonempty transcript must never
+            # silently vanish in that case.
+            self._overlay.set_state("error")
+            message = "Violet could not safely insert this result. Copy the text when you are ready."
+            self._recovery.present(transcript, message)
+            self._tray.showMessage("Violet kept text ready", message)
+            self._return_to_idle(delay_ms=1_000)
+            return
         if result.inserted:
             self._flash("Inserted")
             self._return_to_idle(delay_ms=900)

@@ -31,6 +31,7 @@ SWP_NOACTIVATE = 0x0010
 SWP_FRAMECHANGED = 0x0020
 WM_MOUSEACTIVATE = 0x0021
 MA_NOACTIVATE = 3
+QUIET_DOT_SIZE = 3.2
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 _get_window_long = getattr(user32, "GetWindowLongPtrW", user32.GetWindowLongW)
@@ -732,7 +733,10 @@ class VioletOverlay(QWidget):
             painter.save()
             painter.setClipRect(waveform)
             bar_width = self._stroke_width(4.0)
-            dot_size = self._stroke_width(2.2)
+            # Quiet listening is intentionally visible without pretending to
+            # be speech: nine larger, fully rounded square dots retain their
+            # footprint and spacing at common Windows display scales.
+            dot_size = self._stroke_width(QUIET_DOT_SIZE)
             available = max(0.0, waveform.width() - 8.0)
             count = min(len(self._display_envelope), max(1, int(available // 6.2) + 1))
             levels = list(self._display_envelope)[-count:]
@@ -751,7 +755,7 @@ class VioletOverlay(QWidget):
                     painter.setBrush(QColor(109, 54, 143, 160))
                     painter.drawRoundedRect(
                         QRectF(dot_x - dot_size / 2, dot_y - dot_size / 2, dot_size, dot_size),
-                        dot_size * 0.32, dot_size * 0.32,
+                        dot_size / 2, dot_size / 2,
                     )
                     continue
                 # More vertical room and visual gain make normal speech fill

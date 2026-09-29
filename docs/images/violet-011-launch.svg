@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Violet 0.1.1 — Tiny bubble. Big voice.</title>
+  <desc id="desc">Warm purple launch artwork for Violet, local CPU voice dictation for Windows. A glossy violet speaking bubble sits beside a text field.</desc>
+  <defs>
+    <linearGradient id="night" x2="1" y2="1"><stop stop-color="#251333"/><stop offset=".55" stop-color="#492258"/><stop offset="1" stop-color="#733a73"/></linearGradient>
+    <radialGradient id="bloom"><stop stop-color="#eaa9f1" stop-opacity=".38"/><stop offset="1" stop-color="#dba3ee" stop-opacity="0"/></radialGradient>
+    <linearGradient id="orchid" x2=".25" y2="1"><stop stop-color="#eac8fa"/><stop offset=".35" stop-color="#dba3ee"/><stop offset="1" stop-color="#aa6ad2"/></linearGradient>
+    <linearGradient id="glass" x2="0" y2="1"><stop stop-color="#fff" stop-opacity=".8"/><stop offset="1" stop-color="#fff" stop-opacity=".12"/></linearGradient>
+    <filter id="shadow" x="-40%" y="-80%" width="180%" height="260%"><feDropShadow dy="12" stdDeviation="18" flood-color="#190f25" flood-opacity=".3"/></filter>
+  </defs>
+  <rect width="1200" height="630" rx="32" fill="url(#night)"/>
+  <ellipse cx="1005" cy="315" rx="540" ry="430" fill="url(#bloom)"/>
+  <g fill="none" stroke="#f4c3f7" stroke-opacity=".1"><ellipse cx="1090" cy="255" rx="275" ry="260"/><ellipse cx="1090" cy="255" rx="310" ry="295"/></g>
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <rect x="70" y="62" width="172" height="40" rx="20" fill="#f6d5fc" fill-opacity=".12"/>
+    <text x="92" y="89" fill="#f8dcff" font-size="18" font-weight="600" letter-spacing="1.8">VIOLET 0.1.1</text>
+    <text x="68" y="222" fill="#fff3ff" font-size="88" font-weight="700" letter-spacing="-3">Tiny bubble.</text>
+    <text x="68" y="320" fill="#e9b8f5" font-size="88" font-weight="700" letter-spacing="-3">Big voice.</text>
+    <text x="74" y="372" fill="#edcfee" font-size="25">Think it. Say it. Keep going.</text>
+    <g filter="url(#shadow)">
+      <rect x="750" y="341" width="382" height="154" rx="26" fill="#fff5ff" fill-opacity=".96"/>
+      <rect x="751" y="342" width="380" height="152" rx="25" fill="none" stroke="#fff" stroke-opacity=".65"/>
+      <text x="780" y="397" fill="#61416f" font-size="22">A little voice, right where</text>
+      <text x="780" y="435" fill="#61416f" font-size="22">you write.</text>
+      <rect x="879" y="413" width="2" height="27" rx="1" fill="#8c44a6"/>
+      <rect x="522" y="403" width="210" height="58" rx="29" fill="url(#orchid)" stroke="#b46ac9" stroke-width="1.5"/>
+      <path d="M535 415Q628 400 718 415L718 427Q635 421 535 426Z" fill="url(#glass)" opacity=".62"/>
+      <path d="m545 425 13 13m0-13-13 13" fill="none" stroke="#593267" stroke-width="3.7" stroke-linecap="round"/>
+      <g fill="#6d368f">
+        <rect x="582" y="426" width="5" height="12" rx="2.5"/><rect x="592" y="419" width="5" height="26" rx="2.5"/>
+        <rect x="602" y="416" width="5" height="32" rx="2.5"/><rect x="612" y="423" width="5" height="18" rx="2.5"/>
+        <rect x="622" y="414" width="5" height="36" rx="2.5"/><rect x="632" y="420" width="5" height="24" rx="2.5"/>
+        <rect x="642" y="417" width="5" height="30" rx="2.5"/><rect x="652" y="425" width="5" height="14" rx="2.5"/>
+        <rect x="662" y="422" width="5" height="20" rx="2.5"/>
+      </g>
+      <rect x="695" y="424" width="16" height="16" rx="4" fill="#4b2467"/>
+    </g>
+    <path d="M1007 106v24m-12-12h24M1080 184v14m-7-7h14" fill="none" stroke="#f2c8f7" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+    <text x="75" y="513" fill="#f3d8f8" font-size="18">LOCAL DICTATION FOR WINDOWS</text>
+    <text x="75" y="549" fill="#dcb7e3" font-size="19">CPU only  ·  No account  ·  Offline after setup</text>
+    <text x="75" y="591" fill="#bd92c9" font-size="15">github.com/LeightonR/violet</text>
+    <text x="1131" y="589" fill="#e2b9e8" font-size="15" text-anchor="end">CLICK. SPEAK. KEEP GOING.</text>
+  </g>
+</svg>

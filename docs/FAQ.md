@@ -30,12 +30,13 @@ the last valid caret position rather than jumping to the center of the box.
 
 ### What does the waveform show?
 
-The meter shows nine small, static rounded dots while Violet is listening quietly.
+The meter shows nine rounded square dots while Violet is listening quietly.
 During detected speech, thicker warm-violet bars reflect the live level, with
 enough visual sensitivity for ordinary speech to fill most of their height.
 Stateful streaming voice detection smooths ordinary pauses between syllables;
-silence and rejected noise return to the dots. Its motion follows elapsed time and the platform's display-update
-cadence where available, so it does not promise one fixed frame rate. Voice
+silence and rejected noise return to the static dots. Its motion follows elapsed
+time and the platform's display-update cadence where available, so it does not
+promise one fixed frame rate. Voice
 detection is probabilistic, so music, another nearby voice, or unusual noise may
 still be classified as speech. The meter is a display, not an audio compressor.
 
@@ -69,15 +70,28 @@ starting another transcription process.
 
 ### Why wasn't my text inserted?
 
-If focus or the target changes, Violet shows the transcript in its recovery
-window. Use **Copy** and paste where you intended. A normal user process also
+Finish with the **square Stop button on the right**, or **Ctrl+Alt+Space**.
+The **X on the left cancels and discards** the recording or pending result.
+The waveform area is only a meter; clicking its center does not finish dictation.
+
+If focus or the target changes, or an unexpected insertion error occurs, Violet
+keeps the completed transcript in its recovery window. Check the field, then use
+**Copy** and paste where you intended. A normal user process also
 cannot type into an administrator application. Violet never submits the text
 with Enter.
 
+### How do I update without downloading my model again?
+
+Quit Violet, then run [the current Windows installer](https://github.com/LeightonR/violet/releases/download/v0.1.1/Violet-0.1.1-win64-setup.exe).
+It replaces the application while preserving settings, saved placement, and the
+model cache. For the portable edition, extract the new ZIP into its own folder;
+do not mix files from different versions. Run only one copy at a time.
+
 ### Why is Windows showing an unknown-publisher warning?
 
-The first release is unsigned. Check that you downloaded it from the project's
-GitHub Releases page and compare its published SHA-256. Do not disable Windows
+The current release is unsigned. Check that you downloaded it from the project's
+[GitHub Releases page](https://github.com/LeightonR/violet/releases/tag/v0.1.1)
+and compare its published SHA-256. Do not disable Windows
 security globally. See [Security](../SECURITY.md).
 
 ### Is my microphone working?
@@ -92,3 +106,14 @@ Quit Violet, then uninstall it through Windows Installed apps. Models and
 preferences may be retained for a later installation. To remove those too,
 delete `%LOCALAPPDATA%\Violet` after exiting the app. That folder contains
 settings and model data, not an intentional recording/transcript history.
+
+### Where can I report a bug or share Violet?
+
+Use [GitHub Issues](https://github.com/LeightonR/violet/issues) for ordinary bugs.
+Include your version, application name, and steps using dummy text. Keep private
+recordings, transcripts, and screenshots out of public reports. Security concerns
+belong in the [private reporting channel](https://github.com/LeightonR/violet/security/advisories/new).
+
+Share the [official release](https://github.com/LeightonR/violet/releases/tag/v0.1.1)
+or use the [Violet launch card](images/violet-011-launch.png). Violet is an
+independent project; it is not affiliated with OpenAI or Microsoft.

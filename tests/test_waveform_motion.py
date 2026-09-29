@@ -18,7 +18,7 @@ from PySide6.QtWidgets import QApplication
 
 from violet.audio import SpeechMeter, _get_vad_model, resample_to_16khz
 from violet.focus import FieldRect
-from violet.overlay import VioletOverlay
+from violet.overlay import QUIET_DOT_SIZE, VioletOverlay
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -229,8 +229,13 @@ class WaveformAndSpringTests(unittest.TestCase):
                     groups.append([])
                 groups[-1].append(x)
             self.assertEqual(len(groups), 9)
-            self.assertTrue(all(len(group) <= 4 * dpr for group in groups))
-            self.assertLessEqual(len(occupied_rows), 4 * dpr)
+            # Quiet dots are deliberately larger than the earlier 2.2px mark
+            # but remain nine individually separated rounded squares.
+            self.assertEqual(QUIET_DOT_SIZE, 3.2)
+            self.assertTrue(all(len(group) <= 5 * dpr for group in groups))
+            self.assertGreaterEqual(max(len(group) for group in groups), max(3, int(3 * dpr)))
+            self.assertGreaterEqual(len(occupied_rows), max(3, int(3 * dpr)))
+            self.assertLessEqual(len(occupied_rows), 5 * dpr)
             for _ in range(10):
                 overlay._tick()
             QTest.qWait(12)

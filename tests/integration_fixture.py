@@ -128,6 +128,27 @@ def real_click_overlay(hwnd: int) -> None:
         win32api.SetCursorPos(original)
 
 
+def real_click_recording_stop(hwnd: int) -> None:
+    """Click the visible right-hand Stop square, accounting for display scale."""
+
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    width = right - left
+    if width < 100:
+        raise AssertionError("recording pill is not wide enough to expose Stop")
+    # The final recording pill is 158 logical pixels wide.  Its Stop square is
+    # centered 22 logical pixels from the right edge; deriving the scale from
+    # the live native rectangle keeps this app-owned fixture valid at 100–200%
+    # Windows display scaling.
+    scale = width / 158.0
+    original = win32api.GetCursorPos()
+    try:
+        win32api.SetCursorPos((right - round(22 * scale), (top + bottom) // 2))
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+    finally:
+        win32api.SetCursorPos(original)
+
+
 def drag_overlay(hwnd: int, destination: tuple[int, int]) -> None:
     """Drag only Violet's app-owned overlay, then restore the user's cursor."""
     left, top, right, bottom = win32gui.GetWindowRect(hwnd)
@@ -267,7 +288,13 @@ def main() -> int:
         real_click_overlay(overlay_hwnd)
         eventually(lambda: win32gui.GetWindowRect(overlay_hwnd)[2] - win32gui.GetWindowRect(overlay_hwnd)[0] > 100, "recording pill")
         assert focus.is_current(target), "overlay click stole the original caret"
+        # The waveform lane is intentionally inert so a drag/select gesture
+        # cannot accidentally finish dictation. A middle click therefore keeps
+        # recording active; the explicit right Stop square completes it.
         real_click_overlay(overlay_hwnd)
+        time.sleep(0.24)
+        assert win32gui.GetWindowRect(overlay_hwnd)[2] - win32gui.GetWindowRect(overlay_hwnd)[0] > 100, "waveform lane unexpectedly finished recording"
+        real_click_recording_stop(overlay_hwnd)
         expected = "before dictated text. after"
         eventually(lambda: test_field.GetValuePattern().Value == expected, "punctuated transcript inserted at caret")
 
@@ -295,7 +322,11 @@ def main() -> int:
         eventually(lambda: win32gui.GetWindowRect(overlay_hwnd)[2] - win32gui.GetWindowRect(overlay_hwnd)[0] > 100, "second recording pill")
         assert document.SetFocus()
         eventually(lambda: not focus.is_current(changed_target), "target focus changed")
-        real_click_overlay(overlay_hwnd)
+        # Finish through the same explicit Stop affordance. The resulting text
+        # must be offered only through recovery because the original field no
+        # longer owns focus.
+        time.sleep(0.24)
+        real_click_recording_stop(overlay_hwnd)
         eventually(lambda: recovery_window(app_pid), "recoverable transcript window")
         assert test_field.GetValuePattern().Value == unchanged_source
         value = document.GetValuePattern().Value
