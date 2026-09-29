@@ -51,7 +51,9 @@ to your taskbar. Closing the panel leaves Violet in the tray.
 <p align="center"><img src="artifacts/violet-control-panel.png" alt="Violet control panel with model selection, pause, Transform, startup, and Quit controls" width="390"></p>
 
 The warm orchid gradient and compact microphone stay out of your way. The meter
-is blank while quiet; nine spaced warm-violet bars respond to detected speech.
+shows nine small rounded dots while quiet, growing into thicker warm-violet bars
+when you speak. A sensitive visual level scale makes normal speech use more of
+the available height without changing the recorded audio.
 Its motion follows elapsed time and the platform's display-update cadence where
 available, rather than promising one fixed frame rate. The widget holds its
 position during selection and transient caret updates.

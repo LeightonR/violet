@@ -6,7 +6,7 @@ import queue
 import threading
 from dataclasses import dataclass
 from math import gcd
-from math import log10
+from math import exp, log10
 
 import numpy as np
 import sounddevice as sd
@@ -25,12 +25,11 @@ VAD_ANALYSIS_SAMPLES = VAD_WINDOW_SAMPLES * VAD_ANALYSIS_FRAMES
 # hanging around after a phrase has genuinely ended.
 VAD_HANGOVER_FRAMES = 5
 
-# A fixed dB scale is deliberately gentler than automatic gain control.  It
-# gives quiet, ordinary, and loud voices distinct visible heights without
-# flattening a phrase into a permanently full bar or learning/persisting user
-# audio levels.
-VOICE_FLOOR_DB = -48.0
-VOICE_CEILING_DB = -8.0
+# Visual sensitivity is independent of captured audio. A wider quiet end and
+# earlier full-scale reference let ordinary microphones use the meter height.
+# A soft knee preserves headroom for loud syllables instead of pinning bars.
+VOICE_FLOOR_DB = -54.0
+VOICE_CEILING_DB = -20.0
 
 
 _vad_prewarm_lock = threading.Lock()
@@ -174,7 +173,10 @@ def voice_level(window: np.ndarray) -> float:
         return 0.0
     rms = float(np.sqrt(np.mean(np.square(values, dtype=np.float64))))
     db = 20.0 * log10(max(rms, 1e-7))
-    return float(min(1.0, max(0.0, (db - VOICE_FLOOR_DB) / (VOICE_CEILING_DB - VOICE_FLOOR_DB))))
+    level = max(0.0, (db - VOICE_FLOOR_DB) / (VOICE_CEILING_DB - VOICE_FLOOR_DB))
+    if level > 0.75:
+        level = 0.75 + 0.25 * (1.0 - exp(-(level - 0.75) / 0.30))
+    return float(min(1.0, level))
 
 
 class SpeechGate:

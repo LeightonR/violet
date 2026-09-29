@@ -4,8 +4,9 @@
 
 - Adds an X that discards an active recording or pending result; the separate
   Stop control still finishes dictation.
-- Leaves the meter blank in silence and uses nine spaced warm-violet bars for
-  stateful-VAD-approved speech activity with improved dynamic range.
+- Shows nine small rounded dots in silence, growing into thicker, taller
+  warm-violet bars for detected speech. Increased visual sensitivity keeps quiet
+  speech visible while preserving headroom for louder syllables.
 - Adds frame-paced, elapsed-time motion and a brief spring transition as the
   microphone bubble expands and contracts.
 

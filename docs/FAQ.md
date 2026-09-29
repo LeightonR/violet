@@ -30,10 +30,11 @@ the last valid caret position rather than jumping to the center of the box.
 
 ### What does the waveform show?
 
-The meter stays blank while Violet is listening quietly. During detected speech,
-nine spaced warm-violet bars reflect the live level. Stateful streaming voice
-detection smooths ordinary pauses between syllables; silence and rejected noise
-clear the bars. Its motion follows elapsed time and the platform's display-update
+The meter shows nine small, static rounded dots while Violet is listening quietly.
+During detected speech, thicker warm-violet bars reflect the live level, with
+enough visual sensitivity for ordinary speech to fill most of their height.
+Stateful streaming voice detection smooths ordinary pauses between syllables;
+silence and rejected noise return to the dots. Its motion follows elapsed time and the platform's display-update
 cadence where available, so it does not promise one fixed frame rate. Voice
 detection is probabilistic, so music, another nearby voice, or unusual noise may
 still be classified as speech. The meter is a display, not an audio compressor.

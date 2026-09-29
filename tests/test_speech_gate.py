@@ -91,7 +91,7 @@ class SpeechGateTests(unittest.TestCase):
         # A retained-state Silero call emits one genuine frame at a time, so
         # onset is one 32 ms window rather than the old 128 ms batch burst.
         # Five release frames bridge a tiny syllable gap, then the overlay is
-        # explicitly told to draw nothing.
+        # explicitly returned to its quiet-listening dots.
         self.assertEqual(emissions[0][0] * 32, 32)
         flattened = [state for _frame, states in emissions for state in states]
         first_false = next(index for index, (active, _level) in enumerate(flattened) if not active)
@@ -126,6 +126,9 @@ class SpeechGateTests(unittest.TestCase):
         self.assertEqual(levels, sorted(levels))
         self.assertGreater(levels[1] - levels[0], 0.15)
         self.assertGreater(levels[2] - levels[1], 0.10)
+        self.assertGreater(levels[0], 0.35, "quiet speech should remain clearly visible")
+        self.assertGreater(levels[1], 0.70, "normal speech should use most of the meter height")
+        self.assertGreater(levels[2], 0.88, "loud syllables should approach the top of the meter")
         self.assertLess(levels[-1], 0.95, "ordinary loud speech must not pin every bar at full height")
 
     def test_streaming_session_retains_context_but_new_gate_resets_it(self) -> None:

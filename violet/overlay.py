@@ -728,28 +728,41 @@ class VioletOverlay(QWidget):
         # A compact, familiar speaking waveform. It has a fixed clip region so
         # neither live meter nor animation can overlap the mic or stop control.
         waveform, stop = self._recording_layout()
-        if self._speech_active and waveform is not None:
+        if waveform is not None:
             painter.save()
             painter.setClipRect(waveform)
-            bar_width = self._stroke_width(3.0)
+            bar_width = self._stroke_width(4.0)
+            dot_size = self._stroke_width(2.2)
             available = max(0.0, waveform.width() - 8.0)
             count = min(len(self._display_envelope), max(1, int(available // 6.2) + 1))
             levels = list(self._display_envelope)[-count:]
             left = waveform.left() + 4.0
             right = waveform.right() - 4.0
             for index, level in enumerate(levels):
-                # The dB-mapped microphone target reaches this point unchanged
-                # except for temporal interpolation.  A linear height mapping
-                # preserves audible loud/quiet differences instead of applying
-                # a second sqrt compression that flattens every spoken phrase.
-                if level <= 0.001:
-                    continue
                 x = (left + right) / 2.0 if count == 1 else left + (right - left) * index / (count - 1)
                 x = self._stroke_center(x, bar_width)
-                height = min(waveform.height() - bar_width, 1.5 + (waveform.height() - 4.0) * level)
                 center_y = self._stroke_center(waveform.center().y(), bar_width)
-                painter.setPen(QPen(QColor("#6d368f"), bar_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-                painter.drawLine(x, center_y - height / 2.0, x, center_y + height / 2.0)
+                painter.setPen(Qt.PenStyle.NoPen)
+                if not self._speech_active or level <= 0.001:
+                    # A static row of small rounded squares indicates quiet
+                    # listening. It never creates audio targets or animation.
+                    dot_x = self._stroke_center(x, dot_size)
+                    dot_y = self._stroke_center(waveform.center().y(), dot_size)
+                    painter.setBrush(QColor(109, 54, 143, 160))
+                    painter.drawRoundedRect(
+                        QRectF(dot_x - dot_size / 2, dot_y - dot_size / 2, dot_size, dot_size),
+                        dot_size * 0.32, dot_size * 0.32,
+                    )
+                    continue
+                # More vertical room and visual gain make normal speech fill
+                # the lane. Rounded filled capsules keep their total height
+                # bounded, including the caps, and leave clear gaps between bars.
+                height = bar_width + (waveform.height() - 2.0 - bar_width) * level
+                painter.setBrush(QColor("#6d368f"))
+                painter.drawRoundedRect(
+                    QRectF(x - bar_width / 2, center_y - height / 2, bar_width, height),
+                    bar_width / 2, bar_width / 2,
+                )
             painter.restore()
         if stop is not None:
             painter.setBrush(QColor("#4b2467"))
@@ -773,7 +786,7 @@ class VioletOverlay(QWidget):
             meter_right = min(meter_right, stop.left() - 6.0)
         waveform = None
         if meter_right - meter_left >= 7.0:
-            waveform = QRectF(meter_left, 12, meter_right - meter_left, 18)
+            waveform = QRectF(meter_left, 9, meter_right - meter_left, 24)
         return waveform, stop
 
     @staticmethod

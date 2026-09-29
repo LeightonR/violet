@@ -187,15 +187,15 @@ class WaveformAndSpringTests(unittest.TestCase):
             self.assertGreater(overlay._envelope[-1], quiet_bar)
             self.assertNotEqual(tuple(overlay._envelope), after_quiet_voice)
 
-            # A VAD-off sample clears every visible bar, including any stale
-            # history from a previous phrase.
+            # A VAD-off sample clears speech history; the painter keeps only
+            # the static quiet-listening dots.
             overlay.set_speech_level(0.0, False)
             self.assertFalse(overlay._speech_active)
             self.assertTrue(all(level == 0.0 for level in overlay._envelope))
         finally:
             self._close(overlay)
 
-    def test_silent_recording_draws_no_waveform(self) -> None:
+    def test_silent_recording_draws_nine_static_rounded_dots(self) -> None:
         overlay = self._overlay()
         try:
             overlay.set_state("recording")
@@ -206,20 +206,39 @@ class WaveformAndSpringTests(unittest.TestCase):
             waveform, stop = overlay._recording_layout()
             self.assertIsNotNone(waveform)
             silent = overlay.grab().toImage()
-            # Compare the meter lane with the same body paint while explicitly
-            # suppressing the waveform path.  Silence must leave no static
-            # baseline/dots behind, while the separate Stop control remains.
+            # Compare against the same body without the meter. Quiet listening
+            # has nine small, separated dots rather than a moving waveform.
             with patch.object(overlay, "_recording_layout", return_value=(None, stop)):
                 overlay.update()
                 QTest.qWait(12)
                 without_meter = overlay.grab().toImage()
-            for x in range(int(waveform.left()) + 2, int(waveform.right()) - 1):  # type: ignore[union-attr]
-                self.assertEqual(silent.pixelColor(x, 21), without_meter.pixelColor(x, 21))
+            dpr = silent.devicePixelRatio()
+            occupied_columns: list[int] = []
+            occupied_rows: set[int] = set()
+            for x in range(int(waveform.left() * dpr), int(waveform.right() * dpr)):  # type: ignore[union-attr]
+                changed = False
+                for y in range(int(waveform.top() * dpr), int(waveform.bottom() * dpr)):  # type: ignore[union-attr]
+                    if silent.pixelColor(x, y) != without_meter.pixelColor(x, y):
+                        changed = True
+                        occupied_rows.add(y)
+                if changed:
+                    occupied_columns.append(x)
+            groups: list[list[int]] = []
+            for x in occupied_columns:
+                if not groups or x != groups[-1][-1] + 1:
+                    groups.append([])
+                groups[-1].append(x)
+            self.assertEqual(len(groups), 9)
+            self.assertTrue(all(len(group) <= 4 * dpr for group in groups))
+            self.assertLessEqual(len(occupied_rows), 4 * dpr)
             for _ in range(10):
                 overlay._tick()
             QTest.qWait(12)
             self.assertTrue(all(level == 0.0 for level in overlay._envelope))
             self.assertTrue(all(level == 0.0 for level in overlay._display_envelope))
+            self.assertEqual(overlay.grab().toImage(), silent)
+            self.assertFalse(overlay._frame_fallback.isActive())
+            self.assertFalse(overlay._frame_update_pending)
         finally:
             self._close(overlay)
 

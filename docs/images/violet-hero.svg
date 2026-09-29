@@ -3,8 +3,8 @@
   <desc id="desc">A little voice, right where you write. A glossy warm purple microphone beside a softly lit text field.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#251633"/><stop offset=".55" stop-color="#452352"/><stop offset="1" stop-color="#6e386d"/></linearGradient>
-    <radialGradient id="glow"><stop stop-color="#eda7e8" stop-opacity=".34"/><stop offset="1" stop-color="#eda7e8" stop-opacity="0"/></radialGradient>
-    <linearGradient id="orb" x1=".2" y1="0" x2=".8" y2="1"><stop stop-color="#f0bef9"/><stop offset=".48" stop-color="#c87ce0"/><stop offset="1" stop-color="#a853bf"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#dba3ee" stop-opacity=".34"/><stop offset="1" stop-color="#dba3ee" stop-opacity="0"/></radialGradient>
+    <linearGradient id="orb" x1=".2" y1="0" x2=".8" y2="1"><stop stop-color="#eac8fa"/><stop offset=".48" stop-color="#dba3ee"/><stop offset="1" stop-color="#aa6ad2"/></linearGradient>
     <linearGradient id="glass" x1="0" y1="0" x2=".1" y2="1"><stop stop-color="#fff" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity=".08"/></linearGradient>
     <filter id="shadow" x="-80%" y="-80%" width="260%" height="260%"><feDropShadow dx="0" dy="12" stdDeviation="20" flood-color="#10091d" flood-opacity=".4"/></filter>
   </defs>
@@ -20,8 +20,8 @@
       <rect x="731" y="213" width="397" height="140" rx="25" fill="#fff5ff" fill-opacity=".95"/>
       <rect x="732" y="214" width="395" height="138" rx="24" fill="none" stroke="#ffffff" stroke-opacity=".65"/>
       <text x="762" y="270" fill="#76567e" font-size="21">Let your thoughts flow.</text>
-      <rect x="764" y="288" width="2" height="25" rx="1" fill="#ac58c6"/>
-      <circle cx="682" cy="301" r="34" fill="url(#orb)" stroke="#f1c9fa" stroke-width="1.5"/>
+      <rect x="764" y="288" width="2" height="25" rx="1" fill="#6d368f"/>
+      <circle cx="682" cy="301" r="34" fill="url(#orb)" stroke="#b46ac9" stroke-width="1.5"/>
       <ellipse cx="680" cy="284" rx="24" ry="13" fill="url(#glass)" opacity=".5"/>
       <g fill="none" stroke="#593267" stroke-width="3.4" stroke-linecap="round"><rect x="677" y="287" width="10" height="18" rx="5" fill="#faf0ff" fill-opacity=".45"/><path d="M672 299v3a10 10 0 0 0 20 0v-3M682 312v7m-5 0h10"/></g>
     </g>
