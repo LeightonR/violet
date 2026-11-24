@@ -30,3 +30,17 @@ jobs:
           assert window.action.isEnabled() and "Download model" in window.action.text()
           window.close()
           PY
+      - name: Generate a synthetic voice fixture on macOS
+        if: runner.os == 'macOS'
+        run: say --file-format=WAVE --data-format=LEI16@16000 -o /tmp/violet-fixture.wav "Violet is a local dictation tool. Please send the report tomorrow."
+      - name: Generate a synthetic voice fixture on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y espeak-ng
+          espeak-ng -w /tmp/violet-fixture.wav "Violet is a local dictation tool. Please send the report tomorrow."
+      - name: Verify offline inference through the recording window
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          model_path=$(python -c "from violet.models import model_spec, download_verified_model; from violet.config import model_cache_dir; print(download_verified_model(model_spec('tiny.en'), model_cache_dir(), user_confirmed=True))")
+          python tests/portable_fixture.py "$model_path" /tmp/violet-fixture.wav

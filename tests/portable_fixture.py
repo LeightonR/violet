@@ -23,7 +23,7 @@ def main():
         window = DictationWindow()
         def advance():
             if window.result.toPlainText():
-                app.exit(0)
+                app.exit(0 if "report" in window.result.toPlainText().lower() else 1)
             elif window.status.text() == "Ready to dictate":
                 with patch.object(type(window.recorder), "is_recording", True), patch.object(window.recorder, "stop", return_value=clip):
                     window.activate()
