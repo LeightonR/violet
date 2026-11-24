@@ -31,7 +31,24 @@ SWP_NOACTIVATE = 0x0010
 SWP_FRAMECHANGED = 0x0020
 WM_MOUSEACTIVATE = 0x0021
 MA_NOACTIVATE = 3
-QUIET_DOT_SIZE = 3.2
+
+# The original 42px control was visually heavier than its surrounding editor
+# chrome.  Keep every spatial part on a single 80% design scale so the compact
+# 34px orb, its expanded states, glyphs, controls, and hit rectangles preserve
+# the established proportions at every Windows DPI.
+OVERLAY_SCALE = 0.80
+OVERLAY_DIAMETER = round(42 * OVERLAY_SCALE)
+
+
+def _scaled(value: float) -> float:
+    return value * OVERLAY_SCALE
+
+
+def _scaled_int(value: float) -> int:
+    return round(_scaled(value))
+
+
+QUIET_DOT_SIZE = _scaled(3.2)
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 _get_window_long = getattr(user32, "GetWindowLongPtrW", user32.GetWindowLongW)
@@ -175,7 +192,14 @@ class VioletOverlay(QWidget):
     stop_requested = Signal()
     placement_saved = Signal()
 
-    _widths = {"idle": 42, "recording": 158, "transcribing": 84, "ready": 138, "error": 42}
+    _bubble_size = OVERLAY_DIAMETER
+    _widths = {
+        "idle": OVERLAY_DIAMETER,
+        "recording": _scaled_int(158),
+        "transcribing": _scaled_int(84),
+        "ready": _scaled_int(138),
+        "error": OVERLAY_DIAMETER,
+    }
     _wave_samples = 9
     _spring_duration_ms = 210
 
@@ -212,7 +236,7 @@ class VioletOverlay(QWidget):
         # becoming a stop/start if the pointer crosses Violet before mouse-up.
         self._normal_press_origin: QPoint | None = None
         self._normal_press_moved = False
-        self.resize(self._widths["idle"], 42)
+        self.resize(self._widths["idle"], self._bubble_size)
         # One frame driver owns waveform interpolation, spinner, and the
         # short lifecycle spring.  A visible native QWindow asks Qt for a
         # vsync-aligned UpdateRequest; a precise short timer is only a fallback
@@ -647,7 +671,7 @@ class VioletOverlay(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
         width, height = self.width(), self.height()
-        edge_width = self._stroke_width(1.0)
+        edge_width = self._stroke_width(_scaled(1.0))
         inset = edge_width / 2.0 + 1.0 / max(1.0, self.devicePixelRatioF())
         body = QRectF(inset, inset, width - 2.0 * inset, height - 2.0 * inset)
         gradient = QLinearGradient(body.topLeft(), body.bottomRight())
@@ -658,24 +682,44 @@ class VioletOverlay(QWidget):
         painter.setBrush(gradient)
         edge = QColor("#b46ac9") if self._state != "error" else QColor("#c85388")
         painter.setPen(QPen(edge, edge_width))
-        painter.drawRoundedRect(body, 20, 20)
+        painter.drawRoundedRect(body, _scaled(20), _scaled(20))
 
         # A single lilac rim and white gloss keep the control warm and crisp at
         # small sizes.  There are no cyan/teal subpixel accents to fringe on a
         # high-DPI monitor.
         painter.setBrush(QColor(255, 255, 255, 115))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(QRectF(6, 5, width - 12, 14), 8, 8)
+        painter.drawRoundedRect(
+            QRectF(_scaled(6), _scaled(5), width - _scaled(12), _scaled(14)),
+            _scaled(8),
+            _scaled(8),
+        )
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor(255, 255, 255, 205), self._stroke_width(1.0), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        painter.drawArc(QRectF(7, 5, max(20, width - 14), 22), 28 * 16, 128 * 16)
+        painter.setPen(
+            QPen(
+                QColor(255, 255, 255, 205),
+                self._stroke_width(_scaled(1.0)),
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+            )
+        )
+        painter.drawArc(
+            QRectF(_scaled(7), _scaled(5), max(_scaled(20), width - _scaled(14)), _scaled(22)),
+            28 * 16,
+            128 * 16,
+        )
         if self._transform_enabled:
-            painter.setPen(QPen(QColor(89, 45, 119, 90), self._stroke_width(1.0), Qt.PenStyle.DotLine))
-            painter.drawRoundedRect(body.adjusted(4, 4, -4, -4), 16, 16)
+            painter.setPen(QPen(QColor(89, 45, 119, 90), self._stroke_width(_scaled(1.0)), Qt.PenStyle.DotLine))
+            painter.drawRoundedRect(
+                body.adjusted(_scaled(4), _scaled(4), -_scaled(4), -_scaled(4)),
+                _scaled(16),
+                _scaled(16),
+            )
+        glyph_x, glyph_y = _scaled(22), _scaled(21)
         if self._state in {"recording", "transcribing"}:
-            self._draw_cancel(painter, 22, 21)
+            self._draw_cancel(painter, glyph_x, glyph_y)
         else:
-            self._draw_mic(painter, 22, 21)
+            self._draw_mic(painter, glyph_x, glyph_y)
 
         if self._state == "recording":
             self._draw_recording(painter)
@@ -686,7 +730,7 @@ class VioletOverlay(QWidget):
         elif self._state == "error":
             painter.setBrush(QColor("#c04d86"))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(QRectF(30, 17, 5, 5))
+            painter.drawEllipse(QRectF(_scaled(30), _scaled(17), _scaled(5), _scaled(5)))
         painter.end()
         if self._frame_waiting_for_paint:
             self._frame_waiting_for_paint = False
@@ -711,19 +755,41 @@ class VioletOverlay(QWidget):
     def _draw_mic(self, painter: QPainter, center_x: float, center_y: float) -> None:
         color = QColor("#3d2056") if self._state != "recording" else QColor("#4e2768")
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(color, self._stroke_width(1.8), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        painter.drawRoundedRect(QRectF(center_x - 3, center_y - 8, 6, 11), 3, 3)
-        painter.drawArc(QRectF(center_x - 6, center_y - 3, 12, 10), 0, -180 * 16)
-        painter.drawLine(int(center_x), int(center_y + 7), int(center_x), int(center_y + 10))
-        painter.drawLine(int(center_x - 4), int(center_y + 10), int(center_x + 4), int(center_y + 10))
+        painter.setPen(QPen(color, self._stroke_width(_scaled(1.8)), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.drawRoundedRect(
+            QRectF(center_x - _scaled(3), center_y - _scaled(8), _scaled(6), _scaled(11)),
+            _scaled(3),
+            _scaled(3),
+        )
+        painter.drawArc(
+            QRectF(center_x - _scaled(6), center_y - _scaled(3), _scaled(12), _scaled(10)),
+            0,
+            -180 * 16,
+        )
+        painter.drawLine(
+            QPointF(center_x, center_y + _scaled(7)),
+            QPointF(center_x, center_y + _scaled(10)),
+        )
+        painter.drawLine(
+            QPointF(center_x - _scaled(4), center_y + _scaled(10)),
+            QPointF(center_x + _scaled(4), center_y + _scaled(10)),
+        )
 
     def _draw_cancel(self, painter: QPainter, center_x: float, center_y: float) -> None:
         """Draw the explicit discard action used while audio is in flight."""
 
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor("#4e2768"), self._stroke_width(2.5), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        painter.drawLine(int(center_x - 5), int(center_y - 5), int(center_x + 5), int(center_y + 5))
-        painter.drawLine(int(center_x + 5), int(center_y - 5), int(center_x - 5), int(center_y + 5))
+        painter.setPen(
+            QPen(QColor("#4e2768"), self._stroke_width(_scaled(2.5)), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+        )
+        painter.drawLine(
+            QPointF(center_x - _scaled(5), center_y - _scaled(5)),
+            QPointF(center_x + _scaled(5), center_y + _scaled(5)),
+        )
+        painter.drawLine(
+            QPointF(center_x + _scaled(5), center_y - _scaled(5)),
+            QPointF(center_x - _scaled(5), center_y + _scaled(5)),
+        )
 
     def _draw_recording(self, painter: QPainter) -> None:
         # A compact, familiar speaking waveform. It has a fixed clip region so
@@ -732,16 +798,16 @@ class VioletOverlay(QWidget):
         if waveform is not None:
             painter.save()
             painter.setClipRect(waveform)
-            bar_width = self._stroke_width(4.0)
+            bar_width = self._stroke_width(_scaled(4.0))
             # Quiet listening is intentionally visible without pretending to
             # be speech: nine larger, fully rounded square dots retain their
             # footprint and spacing at common Windows display scales.
             dot_size = self._stroke_width(QUIET_DOT_SIZE)
-            available = max(0.0, waveform.width() - 8.0)
-            count = min(len(self._display_envelope), max(1, int(available // 6.2) + 1))
+            available = max(0.0, waveform.width() - _scaled(8.0))
+            count = min(len(self._display_envelope), max(1, int(available // _scaled(6.2)) + 1))
             levels = list(self._display_envelope)[-count:]
-            left = waveform.left() + 4.0
-            right = waveform.right() - 4.0
+            left = waveform.left() + _scaled(4.0)
+            right = waveform.right() - _scaled(4.0)
             for index, level in enumerate(levels):
                 x = (left + right) / 2.0 if count == 1 else left + (right - left) * index / (count - 1)
                 x = self._stroke_center(x, bar_width)
@@ -761,7 +827,7 @@ class VioletOverlay(QWidget):
                 # More vertical room and visual gain make normal speech fill
                 # the lane. Rounded filled capsules keep their total height
                 # bounded, including the caps, and leave clear gaps between bars.
-                height = bar_width + (waveform.height() - 2.0 - bar_width) * level
+                height = bar_width + (waveform.height() - _scaled(2.0) - bar_width) * level
                 painter.setBrush(QColor("#6d368f"))
                 painter.drawRoundedRect(
                     QRectF(x - bar_width / 2, center_y - height / 2, bar_width, height),
@@ -776,28 +842,28 @@ class VioletOverlay(QWidget):
     def _recording_layout(self) -> tuple[QRectF | None, QRectF | None]:
         """Return only controls that fit beside the untouched mic during spring.
 
-        While the orb opens, it can be as narrow as the idle 42px circle.  The
-        mic occupies the left 42px, so stop/wave controls appear only once they
+        While the orb opens, it can be as narrow as the idle 34px circle. The
+        mic occupies the left 34px, so stop/wave controls appear only once they
         have a separate clipped lane; they never flash over the glyph.
         """
 
-        meter_left = 48.0
-        meter_right = min(110.0, float(self.width() - 6))
+        meter_left = _scaled(48.0)
+        meter_right = min(_scaled(110.0), float(self.width() - _scaled(6)))
         stop: QRectF | None = None
-        candidate_stop = QRectF(self.width() - 28, 15, 12, 12)
-        if candidate_stop.left() >= 48.0:
+        candidate_stop = QRectF(self.width() - _scaled(28), _scaled(15), _scaled(12), _scaled(12))
+        if candidate_stop.left() >= meter_left:
             stop = candidate_stop
-            meter_right = min(meter_right, stop.left() - 6.0)
+            meter_right = min(meter_right, stop.left() - _scaled(6.0))
         waveform = None
-        if meter_right - meter_left >= 7.0:
-            waveform = QRectF(meter_left, 9, meter_right - meter_left, 24)
+        if meter_right - meter_left >= _scaled(7.0):
+            waveform = QRectF(meter_left, _scaled(9), meter_right - meter_left, _scaled(24))
         return waveform, stop
 
     @staticmethod
     def _cancel_hit_rect() -> QRectF:
-        # Larger than the painted X but safely contained inside the 42px mic
-        # lane. The waveform begins at x=48, so this can never steal Stop.
-        return QRectF(12, 11, 20, 20)
+        # Larger than the painted X but safely contained inside the 34px mic
+        # lane. The waveform begins at x=38.4, so this can never steal Stop.
+        return QRectF(_scaled(12), _scaled(11), _scaled(20), _scaled(20))
 
     def _normal_click_action(self, position: QPointF) -> str | None:
         """Map a stationary, overlay-originated click to one explicit action."""
@@ -807,23 +873,33 @@ class VioletOverlay(QWidget):
                 return "cancel"
             if self._state == "recording":
                 _waveform, stop = self._recording_layout()
-                if stop is not None and stop.adjusted(-3, -3, 3, 3).contains(position):
+                if stop is not None and stop.adjusted(-_scaled(3), -_scaled(3), _scaled(3), _scaled(3)).contains(position):
                     return "stop"
             return None
         return "toggle"
 
     def _draw_spinner(self, painter: QPainter) -> None:
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor("#744094"), self._stroke_width(2.0), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.setPen(QPen(QColor("#744094"), self._stroke_width(_scaled(2.0)), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         angle = int(self._phase % 360)
-        painter.drawArc(QRectF(self.width() - 28, 13, 16, 16), angle * 16, 230 * 16)
+        painter.drawArc(
+            QRectF(self.width() - _scaled(28), _scaled(13), _scaled(16), _scaled(16)),
+            angle * 16,
+            230 * 16,
+        )
 
-    def _draw_label(self, painter: QPainter, text: str, x: int = 45) -> None:
+    def _draw_label(self, painter: QPainter, text: str, x: int | None = None) -> None:
+        if x is None:
+            x = _scaled_int(45)
         painter.setPen(QColor("#352046"))
-        font = QFont("Segoe UI", 9)
+        font = QFont("Segoe UI", _scaled_int(9))
         font.setWeight(QFont.Weight.DemiBold)
         painter.setFont(font)
-        painter.drawText(QRect(x, 4, self.width() - x - 36, 34), Qt.AlignmentFlag.AlignVCenter, text)
+        painter.drawText(
+            QRect(x, _scaled_int(4), self.width() - x - _scaled_int(36), _scaled_int(34)),
+            Qt.AlignmentFlag.AlignVCenter,
+            text,
+        )
 
     def _tick(self) -> None:
         # Kept as a small app-owned test/render hook.  It advances elapsed-time
@@ -833,7 +909,7 @@ class VioletOverlay(QWidget):
     def _target_geometry(self) -> QRect:
         rect = self._target_rect
         width = self._widths[self._state]
-        height = 42
+        height = self._bubble_size
         if rect is None:
             return QRect(self.x(), self.y(), width, height)
         screen = QApplication.screenAt(QPoint(rect.left, rect.top)) or QApplication.primaryScreen()

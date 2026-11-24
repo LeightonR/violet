@@ -1,14 +1,14 @@
 # Changelog
 
-## 0.2.0 — Desktop dictation
+## 0.2.1 — Desktop dictation
 
 - Updated Windows browser target detection for hidden typing frames and editable search controls.
-- Redesigned the control panel and retained the original microphone bubble.
+- Redesigned the control panel and scaled the original microphone bubble down by 20%.
 - Added a macOS and Linux source preview with local recording, transcription and clipboard output.
 - Added opt-in NVIDIA inference on Windows, CPU fallback, and spacing cleanup for recognized punctuation.
 - Updated the Windows dependency lock and package version metadata.
 
-See the [release notes](docs/releases/v0.2.0.md) for downloads and platform details.
+See the [release notes](docs/releases/v0.2.1.md) for downloads and platform details.
 
 ## 0.1.1 — Tiny bubble. Big voice.
 

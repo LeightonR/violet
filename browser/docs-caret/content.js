@@ -46,6 +46,18 @@
   }
 
   function visibleLocalCaret() {
+    // Docs gives its own insertion caret a stable id. Collaborator carets use
+    // the same class but do not have this id, and the outer document's hidden
+    // text-event iframe can leave Selection.rangeCount at zero. Prefer this
+    // explicit local marker before considering any class-only fallback.
+    const currentUserCaret = document.getElementById("kix-current-user-cursor-caret");
+    if (currentUserCaret && !isRemoteCursor(currentUserCaret)) {
+      const style = getComputedStyle(currentUserCaret);
+      const rect = currentUserCaret.getBoundingClientRect();
+      if (style.display !== "none" && style.visibility !== "hidden" && rectIsVisible(rect)) {
+        return rect;
+      }
+    }
     const candidates = [];
     for (const element of document.querySelectorAll(".kix-cursor-caret")) {
       if (isRemoteCursor(element)) {

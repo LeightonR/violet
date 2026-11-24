@@ -1,10 +1,10 @@
-<p align="center"><img src="docs/images/violet-020-launch.png" alt="Violet 0.2.0 — On-device dictation" width="100%"></p>
+<p align="center"><img src="docs/images/violet-021-launch.png" alt="Violet 0.2.1 — On-device dictation" width="100%"></p>
 
 <p align="center"><strong>Local English dictation for the desktop.</strong></p>
 
 <p align="center">Windows 10/11 x64 · macOS and Linux preview · Offline after setup · MIT</p>
 
-<p align="center"><a href="https://github.com/LeightonR/violet/releases/download/v0.2.0/Violet-0.2.0-win64-setup.exe"><strong>Download Violet 0.2.0 for Windows</strong></a> · <a href="https://github.com/LeightonR/violet/releases/download/v0.2.0/Violet-0.2.0-win64-portable.zip">Portable ZIP</a> · <a href="docs/FAQ.md">FAQ</a> · <a href="PRIVACY.md">Privacy</a></p>
+<p align="center"><a href="https://github.com/LeightonR/violet/releases/download/v0.2.1/Violet-0.2.1-win64-setup.exe"><strong>Download Violet 0.2.1 for Windows</strong></a> · <a href="https://github.com/LeightonR/violet/releases/download/v0.2.1/Violet-0.2.1-win64-portable.zip">Portable ZIP</a> · <a href="docs/FAQ.md">FAQ</a> · <a href="PRIVACY.md">Privacy</a></p>
 
 Click a text field. Violet appears just to the left of the active text row.
 Click the microphone, speak, then click the square Stop control. Your words
@@ -17,8 +17,8 @@ initial dictation language.
 
 ## Install
 
-1. Download [Violet 0.2.0 Setup](https://github.com/LeightonR/violet/releases/download/v0.2.0/Violet-0.2.0-win64-setup.exe)
-   for Windows x64. A [portable ZIP](https://github.com/LeightonR/violet/releases/download/v0.2.0/Violet-0.2.0-win64-portable.zip)
+1. Download [Violet 0.2.1 Setup](https://github.com/LeightonR/violet/releases/download/v0.2.1/Violet-0.2.1-win64-setup.exe)
+   for Windows x64. A [portable ZIP](https://github.com/LeightonR/violet/releases/download/v0.2.1/Violet-0.2.1-win64-portable.zip)
    is also provided; extract the entire ZIP before launching. No Python installation is needed.
 2. Run Setup as your normal user. It installs Violet for your account, adds
    shortcuts, and enables startup at sign-in by default.
@@ -30,7 +30,7 @@ initial dictation language.
 Updating? Quit Violet and run the new Setup. Your settings, relative placement,
 and downloaded models are preserved.
 
-The current release is unsigned. Verify the [release checksums](https://github.com/LeightonR/violet/releases/download/v0.2.0/SHA256SUMS.txt)
+The current release is unsigned. Verify the [release checksums](https://github.com/LeightonR/violet/releases/download/v0.2.1/SHA256SUMS.txt)
 if Windows shows an unknown-publisher warning. See [Security](SECURITY.md) for details.
 
 **Requirements:** Windows 10 version 1809 or later / Windows 11, x64 CPU with
@@ -76,7 +76,7 @@ Click the document body and dictate with the microphone or **Ctrl+Alt+Space**. F
 
 ## macOS and Linux source preview
 
-Install Python 3.12. On Debian or Ubuntu install `libportaudio2` and `python3-venv`. On macOS allow microphone access for the app or terminal launching Violet. From a source checkout run the following commands. You can also download the [Python wheel](https://github.com/LeightonR/violet/releases/download/v0.2.0/violet_desktop_dictation-0.2.0-py3-none-any.whl) and pass its local filename in place of the dot in the install command.
+Install Python 3.12. On Debian or Ubuntu install `libportaudio2` and `python3-venv`. On macOS allow microphone access for the app or terminal launching Violet. From a source checkout run the following commands. You can also download the [Python wheel](https://github.com/LeightonR/violet/releases/download/v0.2.1/violet_desktop_dictation-0.2.1-py3-none-any.whl) and pass its local filename in place of the dot in the install command.
 
 ```sh
 python3.12 -m venv .venv
@@ -170,7 +170,7 @@ private transcripts, credentials, and personal screenshots out of public issues.
 
 Want to share Violet? The [launch card](docs/images/violet-011-launch.png) and
 [editable SVG](docs/images/violet-011-launch.svg) are ready to use. Link people to
-the [official release](https://github.com/LeightonR/violet/releases/tag/v0.2.0).
+the [official release](https://github.com/LeightonR/violet/releases/tag/v0.2.1).
 
 ## License and acknowledgments
 
