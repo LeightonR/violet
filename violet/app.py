@@ -547,7 +547,7 @@ class VioletController(QObject):
         self._app.installNativeEventFilter(self._hotkey)
         if self._enabled:
             self._start_docs_caret_bridge()
-            self._pointer_clicks.start()
+            self._start_pointer_click_tracking()
         if self._hotkey.registered:
             self._hotkey_action.setText("Ctrl+Alt+Space: ready")
         else:
@@ -703,7 +703,7 @@ class VioletController(QObject):
         self._latest_target = None
         if enabled:
             self._start_docs_caret_bridge()
-            self._pointer_clicks.start()
+            self._start_pointer_click_tracking()
             if not self._poller.isActive():
                 self._poller.start()
             self._poll_focus()
@@ -746,6 +746,14 @@ class VioletController(QObject):
         bridge, self._docs_caret_bridge = self._docs_caret_bridge, None
         if bridge is not None:
             bridge.stop()
+
+    def _start_pointer_click_tracking(self) -> None:
+        """Best-effort visual fallback; a blocked hook never blocks Violet."""
+
+        try:
+            self._pointer_clicks.start()
+        except OSError:
+            return
 
     def _anchor_hidden_target(self, target: EditableTarget) -> EditableTarget:
         """Prefer fresh Docs caret geometry, with a verified click fallback.

@@ -53,6 +53,9 @@ user32.CallNextHookEx.argtypes = (ctypes.c_void_p, ctypes.c_int, wintypes.WPARAM
 user32.CallNextHookEx.restype = ctypes.c_ssize_t
 user32.UnhookWindowsHookEx.argtypes = (ctypes.c_void_p,)
 user32.UnhookWindowsHookEx.restype = wintypes.BOOL
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+kernel32.GetModuleHandleW.argtypes = (ctypes.c_wchar_p,)
+kernel32.GetModuleHandleW.restype = ctypes.c_void_p
 
 
 class PointerClickTracker:
@@ -94,7 +97,8 @@ class PointerClickTracker:
             return int(user32.CallNextHookEx(None, code, message, lparam))
 
         ctypes.set_last_error(0)
-        hook = user32.SetWindowsHookExW(WH_MOUSE_LL, callback, None, 0)
+        module = kernel32.GetModuleHandleW(None)
+        hook = user32.SetWindowsHookExW(WH_MOUSE_LL, callback, module, 0)
         if not hook:
             return False
         # Keep the CFUNCTYPE object alive for the whole native hook lifetime.

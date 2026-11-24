@@ -20,6 +20,7 @@ internal static class VioletCaretHost
     private const int BridgeVersion = 1;
     private const int MaxNativeMessageBytes = 16 * 1024;
     private const int ConnectTimeoutMilliseconds = 250;
+    private const string AllowedExtensionOrigin = "chrome-extension://ljjgdbghiehmhfladhlehonfomhlnoch/";
     private static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
     private static readonly Regex SessionPattern = new Regex("^[A-Za-z0-9_-]{8,96}$", RegexOptions.CultureInvariant);
     private static TcpClient client;
@@ -31,8 +32,16 @@ internal static class VioletCaretHost
         internal string Token;
     }
 
-    private static void Main()
+    private static void Main(string[] arguments)
     {
+        // Chrome supplies the caller origin as the first host argument. The
+        // manifest allowlist is the primary boundary; checking it again keeps
+        // this host fail-closed if it is launched through another mechanism.
+        if (arguments == null || arguments.Length == 0 ||
+            !String.Equals(arguments[0], AllowedExtensionOrigin, StringComparison.Ordinal))
+        {
+            return;
+        }
         try
         {
             using (Stream input = Console.OpenStandardInput())
