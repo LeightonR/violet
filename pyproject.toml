@@ -10,6 +10,8 @@ requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
 classifiers = [
     "Development Status :: 4 - Beta",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
     "Environment :: Win32 (MS Windows)",
     "Operating System :: Microsoft :: Windows :: Windows 10",
     "Operating System :: Microsoft :: Windows :: Windows 11",
@@ -23,6 +25,9 @@ dependencies = [
     "uiautomation==2.0.29; sys_platform == 'win32'",
     "pywin32==311; sys_platform == 'win32'",
 ]
+
+[project.gui-scripts]
+violet-dictation = "violet.__main__:run"
 
 [tool.setuptools]
 packages = ["violet"]

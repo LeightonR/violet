@@ -1,0 +1,46 @@
+{
+  "purpose": "CUDA FP16 latency/output-consistency check only; synthetic SAPI fixture is not a general WER benchmark.",
+  "timestamp_utc": "2026-11-24T06:53:12.228254+00:00",
+  "fixture": {
+    "path": "synthetic_fixture_padded.wav",
+    "duration_seconds": 19.451
+  },
+  "settings": {
+    "model": "large-v3-turbo",
+    "device": "cuda",
+    "compute_type": "float16",
+    "language": "en",
+    "beam_size": 1,
+    "best_of": 1,
+    "temperature": 0,
+    "condition_on_previous_text": false,
+    "vad_filter": true,
+    "vad_min_silence_duration_ms": 500,
+    "input": "predecoded 16 kHz samples, matching Violet's recorder-to-worker path",
+    "repeats_after_warmup": 3
+  },
+  "environment": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "faster_whisper": "1.2.1",
+    "ctranslate2": "4.8.2"
+  },
+  "result": {
+    "model_load_and_probe_seconds": 2.236,
+    "warmup_seconds": 0.45,
+    "run_seconds": [
+      0.252,
+      0.25,
+      0.263
+    ],
+    "median_seconds": 0.252,
+    "median_realtime_factor": 77.1,
+    "warmup_transcript": "Violet is a local desktop dictation tool. It should put well-punctuated text into the focused field immediately. Please send the final report to MIU at noon tomorrow. The Threadripper has 32 physical cores and 256 GB of memory.",
+    "run_transcripts": [
+      "Violet is a local desktop dictation tool. It should put well-punctuated text into the focused field immediately. Please send the final report to MIU at noon tomorrow. The Threadripper has 32 physical cores and 256 GB of memory.",
+      "Violet is a local desktop dictation tool. It should put well-punctuated text into the focused field immediately. Please send the final report to MIU at noon tomorrow. The Threadripper has 32 physical cores and 256 GB of memory.",
+      "Violet is a local desktop dictation tool. It should put well-punctuated text into the focused field immediately. Please send the final report to MIU at noon tomorrow. The Threadripper has 32 physical cores and 256 GB of memory."
+    ],
+    "consistent_output": true
+  }
+}

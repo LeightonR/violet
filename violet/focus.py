@@ -42,6 +42,11 @@ class FieldRect:
     def height(self) -> int:
         return self.bottom - self.top
 
+    def contains(self, x: int, y: int) -> bool:
+        """Whether a desktop point lies inside this exclusive-edge rectangle."""
+
+        return self.left <= x < self.right and self.top <= y < self.bottom
+
 
 @dataclass(frozen=True, slots=True)
 class EditableTarget:
@@ -59,6 +64,10 @@ class EditableTarget:
     # anchor is an explicit visual fallback, never evidence that a selection
     # has a caret row.
     anchor_is_caret: bool
+    # The target itself was off-screen and a visible ancestor supplied the
+    # placement canvas.  Google Docs uses this pattern for its editable iframe;
+    # retaining it lets only that narrow case opt into geometry fallbacks.
+    uses_visible_ancestor: bool = False
 
 
 class FocusService:
@@ -87,6 +96,7 @@ class FocusService:
                 return None
             if not self._is_text_capable(control):
                 return None
+            hidden_input = bool(control.IsOffscreen)
             rect = self._visible_target_rect(control)
             if rect is None:
                 return None
@@ -102,6 +112,7 @@ class FocusService:
                 rect=rect,
                 anchor_rect=anchor_rect,
                 anchor_is_caret=anchor_is_caret,
+                uses_visible_ancestor=hidden_input,
             )
         except Exception:
             # UIA can throw when an app destroys an element during the query.
@@ -263,7 +274,51 @@ def retain_last_caret_anchor(
         and previous.process_id == current.process_id
         and previous.control_type == current.control_type
         and previous.rect == current.rect
+        and previous.uses_visible_ancestor == current.uses_visible_ancestor
     )
     if not same_control:
         return current
     return replace(current, anchor_rect=previous.anchor_rect, anchor_is_caret=True)
+
+
+def anchor_hidden_target_at_point(
+    target: EditableTarget,
+    x: int,
+    y: int,
+    *,
+    caret_height: int = 22,
+) -> EditableTarget:
+    """Turn one verified Docs-canvas click into a compact placement anchor.
+
+    This is a visual fallback only for a hidden keyboard target with a visible
+    ancestor.  It does not change the target identity used for insertion, and
+    points outside the independently discovered visible canvas are ignored.
+    """
+
+    if not target.uses_visible_ancestor or not target.rect.contains(x, y):
+        return target
+    height = min(max(1, int(caret_height)), target.rect.height)
+    left = min(max(int(x), target.rect.left), target.rect.right - 2)
+    top = min(max(int(y) - height // 2, target.rect.top), target.rect.bottom - height)
+    anchor = FieldRect(left, top, left + 2, top + height)
+    return replace(target, anchor_rect=anchor, anchor_is_caret=True)
+
+
+def anchor_hidden_target_at_rect(
+    target: EditableTarget,
+    rect: FieldRect | None,
+) -> EditableTarget:
+    """Apply an exact, already-validated browser caret rectangle to Docs only."""
+
+    if rect is None or not target.uses_visible_ancestor:
+        return target
+    if (
+        rect.left < target.rect.left
+        or rect.top < target.rect.top
+        or rect.right > target.rect.right
+        or rect.bottom > target.rect.bottom
+        or rect.width < 2
+        or rect.height < 1
+    ):
+        return target
+    return replace(target, anchor_rect=rect, anchor_is_caret=True)

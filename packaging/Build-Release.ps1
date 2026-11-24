@@ -60,7 +60,7 @@ function Copy-ReleaseSource {
         Get-ChildItem -LiteralPath $Destination -Force | Remove-Item -Recurse -Force
     }
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    foreach ($directory in @('violet', 'packaging')) {
+    foreach ($directory in @('violet', 'packaging', 'browser')) {
         $origin = Join-Path $projectRoot $directory
         $destinationDirectory = Join-Path $Destination $directory
         Get-ChildItem -LiteralPath $origin -Recurse -File | Where-Object {
@@ -241,8 +241,32 @@ if (Test-Path -LiteralPath $releaseRoot) {
 }
 New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
 Copy-Item -LiteralPath $builtBundle -Destination $bundleRoot -Recurse -Force
+$extensionDir = Join-Path $sourceRoot 'browser\docs-caret'
+Copy-Item -LiteralPath $extensionDir -Destination (Join-Path $bundleRoot 'docs-caret') -Recurse
+$hostSource = Join-Path $sourceRoot 'browser\native\VioletCaretHost.cs'
+$hostExe = Join-Path $bundleRoot 'VioletCaretHost.exe'
+$compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+Invoke-Checked -Description 'Compiling the Chrome native messaging host' -Action {
+    & $compiler /nologo /target:exe /optimize+ /reference:System.Web.Extensions.dll "/out:$hostExe" $hostSource
+}
+$extensionManifest = Get-Content (Join-Path $extensionDir 'manifest.json') -Raw | ConvertFrom-Json
+$keyBytes = [Convert]::FromBase64String($extensionManifest.key)
+$keyHash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($keyBytes)
+$extensionId = -join ($keyHash[0..15] | ForEach-Object {
+    [char](97 + ($_ -shr 4))
+    [char](97 + ($_ -band 15))
+})
+@{
+    name = 'org.violet.docs_caret'
+    description = 'Forward Google Docs caret geometry to Violet'
+    path = 'VioletCaretHost.exe'
+    type = 'stdio'
+    allowed_origins = @("chrome-extension://$extensionId/")
+} | ConvertTo-Json | Set-Content (Join-Path $bundleRoot 'org.violet.docs_caret.json') -Encoding ascii
+
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'packaging\THIRD_PARTY_NOTICES.md') -Destination (Join-Path $bundleRoot 'THIRD_PARTY_NOTICES.md') -Force
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'packaging\MODIFIED_UPSTREAM_SOURCES.md') -Destination (Join-Path $bundleRoot 'MODIFIED_UPSTREAM_SOURCES.md') -Force
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'packaging\Install-VioletCudaRuntime.ps1') -Destination (Join-Path $bundleRoot 'Install-VioletCudaRuntime.ps1') -Force
 Copy-Item -LiteralPath (Join-Path $auditRoot 'dependency-manifest.json') -Destination (Join-Path $bundleRoot 'dependency-manifest.json') -Force
 Copy-Item -LiteralPath $auditReport -Destination (Join-Path $bundleRoot 'pip-audit.json') -Force
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'LICENSE') -Destination (Join-Path $bundleRoot 'LICENSE') -Force
@@ -322,10 +346,16 @@ if (-not $SkipInstaller) {
     }
 }
 
+Invoke-Checked -Description 'Building portable Python wheel' -Action {
+    & $buildPython -m pip wheel --no-deps --no-build-isolation --wheel-dir $releaseRoot $sourceRoot
+}
+$portableWheel = Join-Path $releaseRoot 'violet_desktop_dictation-0.2.0-py3-none-any.whl'
+if (-not (Test-Path -LiteralPath $portableWheel)) { throw 'Portable Python wheel is missing.' }
+
 Invoke-Checked -Description 'Writing release file SHA-256 manifest' -Action {
     & $buildPython $metadataScript artifact-manifest --directory $releaseRoot --output (Join-Path $releaseRoot 'artifact-manifest.json')
 }
-$sumTargets = @($portableZip, (Join-Path $bundleRoot 'Violet.exe')) | Where-Object { Test-Path -LiteralPath $_ }
+$sumTargets = @($portableWheel, $portableZip, (Join-Path $bundleRoot 'Violet.exe')) | Where-Object { Test-Path -LiteralPath $_ }
 $installer = Join-Path $releaseRoot 'Violet-0.2.0-win64-setup.exe'
 if (Test-Path -LiteralPath $installer) { $sumTargets += $installer }
 $sums = foreach ($target in $sumTargets) {

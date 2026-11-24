@@ -21,6 +21,7 @@ class Settings:
     language: str = "en"
     cpu_threads: int = 8
     input_device: int | None = None
+    gpu_acceleration: bool = False
 
 
 def app_data_dir() -> Path:
@@ -85,6 +86,9 @@ def load_settings() -> Settings:
     candidate_device = raw.get("input_device")
     if isinstance(candidate_device, int) and not isinstance(candidate_device, bool) and candidate_device >= 0:
         settings.input_device = candidate_device
+    candidate_gpu_acceleration = raw.get("gpu_acceleration")
+    if isinstance(candidate_gpu_acceleration, bool):
+        settings.gpu_acceleration = candidate_gpu_acceleration
     return settings
 
 

@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Violet Docs Caret",
+  "version": "1.0.0",
+  "description": "Sends only the local Google Docs caret geometry to Violet.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuCSfP77PXBAvgvTUL/UdPyQu+xeKqeE4vOc3nwIC8b1FO5tLBL+rM5f5gjIj9vUBWONmeteCnvwQ5EwBPxZ5CQEr1M5D174uk5xvuguYbeyS+lPjKYVzD8Wwv23TS3l0f73HGs9ZfUtgrp4dyBTJ2bLw8swL4oFGBZaJfAgnxhFLLLAXvB2d6lGZBGeW4dVhtwnfP4hC0YncQ3+XzvhUdUpgNe5CzF4WZ+ClvQAlXtf/ATWOftB0ufHf/UZJ59xZg36VNxjR1l3NOno7fHJ3edLKolf47pphqHbzll731bA8UEwfLXDbTzdtKL1Cs0EKK0mRERX5szuXSOjlgdEN7QIDAQAB",
+  "permissions": [
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "https://docs.google.com/document/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://docs.google.com/document/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

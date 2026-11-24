@@ -6,7 +6,7 @@ and known limitations so they can be reviewed.
 
 ## Supported release
 
-The current Windows 10/11 x64 release is the only supported platform. Run Violet
+Violet ships a Windows 10/11 x64 package and a macOS and Linux recording-window preview. Run Violet
 as your normal user. It does not need administrator access. Windows integrity
 rules prevent a normal process from injecting text into elevated applications.
 
@@ -20,8 +20,8 @@ rules prevent a normal process from injecting text into elevated applications.
   clipboard. If the target cannot be verified, a recovery window offers Copy.
 - The overlay does not activate or repeatedly raise itself while you edit.
   Pointer presses that began outside the overlay cannot start dictation.
-- No server, telemetry collector, embedded credential, or auto-update executor
-  is part of the app. Models are data, not remote Python plugins.
+- The optional Docs caret extension sends geometry through a native host restricted to its extension ID. Violet accepts bounded messages using a per-launch bearer on loopback. This channel can update overlay placement only.
+
 
 Target checks reduce accidental insertion but cannot make Windows input
 injection atomic: another program can change focus between a check and the OS

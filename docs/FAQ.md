@@ -6,6 +6,38 @@ No. Violet uses your CPU and a downloaded speech model. No account or
 subscription is needed. Model setup needs internet access; dictation afterward
 is local.
 
+### How do I use NVIDIA GPU acceleration?
+
+Violet uses the CPU by default. On a Windows PC configured with Violet's
+private CUDA 12 runtime, quit Violet and run the included installer as the same
+Windows user:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\Programs\Violet\Install-VioletCudaRuntime.ps1"
+```
+
+For the portable ZIP, run its `Install-VioletCudaRuntime.ps1` from the extracted
+Violet folder instead.
+
+That command changes neither the system CUDA installation nor the persistent
+PowerShell execution policy. It downloads about 1.17 GiB and installs about
+1.86 GiB only at `%LOCALAPPDATA%\Violet\runtime\cuda12`. The script pins and
+SHA-256-verifies NVIDIA CUDA Installer Team's
+[`nvidia-cublas-cu12` 12.9.2.10](https://pypi.org/project/nvidia-cublas-cu12/12.9.2.10/)
+and [`nvidia-cudnn-cu12` 9.28.1.4](https://pypi.org/project/nvidia-cudnn-cu12/9.28.1.4/)
+Windows wheels before extracting their DLLs and licenses. Its source contains
+the exact PyPI file URLs and hashes; no Python or CUDA Toolkit installation is
+needed.
+
+Then open the control panel, select **Use NVIDIA GPU acceleration**, then quit
+and reopen Violet. The preference applies only to Violet. If CUDA cannot
+complete Violet's startup check, it falls back to the local CPU engine
+automatically.
+
+GPU decoding is much faster on supported hardware, and can produce a slightly
+different recognition result from CPU decoding. Uncheck **Use NVIDIA GPU
+acceleration** and restart Violet to return to CPU decoding.
+
 ### Does it run on my version of Windows?
 
 The release targets 64-bit Windows 10 (version 1809 or later) and Windows 11.

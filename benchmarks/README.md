@@ -48,6 +48,30 @@ was selected because it reached that result with fewer inference threads, leavin
 more headroom for a responsive desktop, not because this single test proves a
 universal model-speed ranking.
 
+## Optional NVIDIA acceleration
+
+Violet's public default remains CPU INT8. A locally configured Windows NVIDIA
+path uses the same `large-v3-turbo` model with CUDA FP16 only after the user
+selects **Use NVIDIA GPU acceleration** and restarts Violet. Violet validates
+the locally installed CUDA 12 libraries and runs a short encoder probe during
+startup. A failed probe falls back to CPU before a recording can be lost.
+
+On this workstation's RTX 5090, the padded 19.451-second fixture completed in
+0.252 seconds median after warm-up, compared with 3.638 seconds for the CPU
+configuration rerun during the 0.2.0 upgrade. The output was deterministic in
+each mode, but GPU decoding changed one ambiguous phrase in the synthetic
+fixture. This is why acceleration is explicitly opt-in rather than a global
+quality claim. The current workstation's NVIDIA libraries are stored privately
+at `%LOCALAPPDATA%\Violet\runtime\cuda12`; Violet changes only its own process
+DLL search path and never edits the system CUDA installation.
+
+The user-run `Install-VioletCudaRuntime.ps1` script pins and SHA-256 verifies
+the official NVIDIA CUDA Installer Team
+[`nvidia-cublas-cu12` 12.9.2.10](https://pypi.org/project/nvidia-cublas-cu12/12.9.2.10/)
+and [`nvidia-cudnn-cu12` 9.28.1.4](https://pypi.org/project/nvidia-cudnn-cu12/9.28.1.4/)
+Windows wheels. The exact PyPI files and digests live in the script, rather than
+depending on an unpinned CUDA Toolkit or changing the system installation.
+
 ## Fixture and limits
 
 `synthetic_fixture.wav` is a 17.451-second English Windows SAPI voice sample;
@@ -78,6 +102,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\benchmarks\create_syntheti
 The benchmark downloads only its two candidate CTranslate2 models under
 `benchmarks\model-cache`. The completed Turbo cache can be copied intact to the
 app's normal model-cache location to avoid a duplicate download.
+
+After running `Install-VioletCudaRuntime.ps1` and downloading Violet's approved
+large-v3-turbo model, measure the production CUDA configuration with:
+
+```powershell
+.\.venv\Scripts\python.exe .\benchmarks\benchmark_stt_gpu.py
+```
+
+It writes `stt_gpu_results.json`, including the backend, post-warmup timings,
+and decoded strings. It exits nonzero rather than silently benchmarking CPU if
+the optional CUDA path is unavailable.
 
 ## Primary sources
 

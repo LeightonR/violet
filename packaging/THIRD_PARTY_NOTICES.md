@@ -34,6 +34,13 @@ in `MODIFIED_UPSTREAM_SOURCES.md`. The patch defers its optional PyAV import to
 file decoding, which Violet does not expose; the distribution contains no
 PyAV, FFmpeg, x264, or x265 binaries.
 
+The optional `Install-VioletCudaRuntime.ps1` is not part of Violet's default
+runtime. Only after a person runs it explicitly does it download the
+NVIDIA CUDA Installer Team's SHA-256-pinned `nvidia-cublas-cu12` 12.9.2.10 and
+`nvidia-cudnn-cu12` 9.28.1.4 Windows wheels from PyPI. It copies their supplied
+licenses into that person's private `%LOCALAPPDATA%\Violet\runtime\cuda12`
+directory. The installer source records the exact upstream file URLs and hashes.
+
 Model weights are not bundled with Violet.  When a person explicitly approves
 a model download, Violet only accepts the fixed files and SHA-256 values in its
 allowlist; the chosen model's upstream license still applies.

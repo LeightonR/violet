@@ -8,7 +8,13 @@ from unittest.mock import patch
 
 import uiautomation as auto
 
-from violet.focus import FieldRect, FocusService
+from violet.focus import (
+    EditableTarget,
+    FieldRect,
+    FocusService,
+    anchor_hidden_target_at_point,
+    anchor_hidden_target_at_rect,
+)
 
 
 class _Bounds:
@@ -102,6 +108,7 @@ class GoogleDocsFocusTests(unittest.TestCase):
         self.assertEqual(target.rect, FieldRect(100, 140, 1_100, 900))
         self.assertEqual(target.anchor_rect, target.rect)
         self.assertFalse(target.anchor_is_caret)
+        self.assertTrue(target.uses_visible_ancestor)
 
     def test_hidden_editor_does_not_need_focusable_metadata_when_it_has_focus(self) -> None:
         visible_editor = _Control(
@@ -158,6 +165,66 @@ class GoogleDocsFocusTests(unittest.TestCase):
         dropdown = _Control(control_type=auto.ControlType.ComboBoxControl, text_pattern=True)
 
         self.assertIsNone(self._snapshot(dropdown))
+
+    def test_hidden_editor_click_uses_a_compact_caret_like_anchor(self) -> None:
+        target = EditableTarget(
+            runtime_id=(42, 7),
+            foreground_hwnd=501,
+            process_id=1200,
+            control_type=auto.ControlType.EditControl,
+            rect=FieldRect(100, 140, 1_100, 900),
+            anchor_rect=FieldRect(100, 140, 1_100, 900),
+            anchor_is_caret=False,
+            uses_visible_ancestor=True,
+        )
+
+        anchored = anchor_hidden_target_at_point(target, 460, 360)
+
+        self.assertTrue(anchored.anchor_is_caret)
+        self.assertEqual(anchored.anchor_rect, FieldRect(460, 349, 462, 371))
+
+    def test_outside_click_and_visible_target_do_not_change_anchor(self) -> None:
+        hidden = EditableTarget(
+            runtime_id=(42, 7),
+            foreground_hwnd=501,
+            process_id=1200,
+            control_type=auto.ControlType.EditControl,
+            rect=FieldRect(100, 140, 1_100, 900),
+            anchor_rect=FieldRect(100, 140, 1_100, 900),
+            anchor_is_caret=False,
+            uses_visible_ancestor=True,
+        )
+        visible = EditableTarget(
+            runtime_id=(42, 8),
+            foreground_hwnd=501,
+            process_id=1200,
+            control_type=auto.ControlType.EditControl,
+            rect=FieldRect(100, 140, 1_100, 900),
+            anchor_rect=FieldRect(100, 140, 1_100, 900),
+            anchor_is_caret=False,
+        )
+
+        self.assertIs(anchor_hidden_target_at_point(hidden, 90, 360), hidden)
+        self.assertIs(anchor_hidden_target_at_point(visible, 460, 360), visible)
+
+    def test_exact_browser_rect_is_accepted_only_inside_hidden_canvas(self) -> None:
+        target = EditableTarget(
+            runtime_id=(42, 7),
+            foreground_hwnd=501,
+            process_id=1200,
+            control_type=auto.ControlType.EditControl,
+            rect=FieldRect(100, 140, 1_100, 900),
+            anchor_rect=FieldRect(100, 140, 1_100, 900),
+            anchor_is_caret=False,
+            uses_visible_ancestor=True,
+        )
+        caret = FieldRect(460, 349, 462, 372)
+
+        anchored = anchor_hidden_target_at_rect(target, caret)
+
+        self.assertEqual(anchored.anchor_rect, caret)
+        self.assertTrue(anchored.anchor_is_caret)
+        self.assertIs(anchor_hidden_target_at_rect(target, FieldRect(99, 349, 101, 372)), target)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # Privacy
 
-Violet transcribes on your Windows computer. There is no Violet account,
+Violet transcribes on your computer. There is no Violet account,
 analytics service, cloud transcription endpoint, or transcript history.
 
 ## Audio and text
@@ -17,6 +17,8 @@ does not prevent Windows paging, crash dumps, or other software on your computer
 from retaining process memory. Text inserted into another application is
 subject to that application's privacy practices.
 
+On macOS and Linux, Violet shows the transcript in its recording window. **Copy transcript** places it on the system clipboard. Clipboard managers and the application where you paste can retain it.
+
 ## Accessibility
 
 While enabled, Violet checks the foreground window and focused Windows UI
@@ -24,6 +26,8 @@ Automation control to find an editable field. It examines control identity,
 editable/password/read-only properties, selection geometry, and caret bounds.
 It does not fetch the field's text contents, keep a keystroke log, or register
 a general keyboard hook. It registers only its dictation hotkey.
+
+For hidden browser editors, Violet can retain the latest left-click coordinates in memory. The optional Chrome extension reads the local caret rectangle on Google Docs. It sends geometry and freshness information to the native host, which forwards it to Violet on this PC. The host reads a short-lived local credential from the user's Violet data directory. The caret channel does not carry audio, document text or document titles.
 
 Password and read-only fields are excluded when their accessibility provider
 identifies them correctly. An application with an incorrect accessibility

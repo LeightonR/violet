@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 from PySide6.QtCore import QThread, Signal
 
+from .acceleration import InferencePlan, load_local_whisper_model
 from .audio import contains_voice_energy
 from .config import Settings
 from .formatting import normalize_transcript
@@ -24,6 +25,11 @@ class WhisperWorker(QThread):
         self._settings = settings
         self._model_path = Path(model_path)
         self._jobs: queue.Queue[tuple[int, np.ndarray] | None] = queue.Queue()
+        self._inference_plan = InferencePlan("cpu", "int8", "CPU acceleration")
+
+    @property
+    def acceleration_detail(self) -> str:
+        return self._inference_plan.detail
 
     def submit(self, request_id: int, samples: np.ndarray) -> None:
         # Copy guarantees the recorder can promptly release its buffer.
@@ -44,20 +50,11 @@ class WhisperWorker(QThread):
 
     def run(self) -> None:
         try:
-            from faster_whisper import WhisperModel
-
             # `model_path` has already been verified against Violet's pinned
             # static model manifest. Loading a directory with local_files_only
             # keeps normal dictation entirely offline and prevents a model ID
             # or network cache from changing the runtime after approval.
-            model = WhisperModel(
-                str(self._model_path),
-                device="cpu",
-                compute_type="int8",
-                cpu_threads=max(1, self._settings.cpu_threads),
-                num_workers=1,
-                local_files_only=True,
-            )
+            model, self._inference_plan = load_local_whisper_model(self._settings, self._model_path)
         except Exception as error:
             self.model_failed.emit(f"Could not prepare the local speech model: {error}")
             self._drain_failed_jobs("The speech model is unavailable.")

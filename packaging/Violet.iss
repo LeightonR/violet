@@ -47,6 +47,10 @@ Name: "startup"; Description: "Start Violet when I sign in"; GroupDescription: "
 [Files]
 Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[Registry]
+Root: HKCU; Subkey: "Software\Google\Chrome\NativeMessagingHosts\org.violet.docs_caret"; ValueType: string; ValueData: "{app}\org.violet.docs_caret.json"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Edge\NativeMessagingHosts\org.violet.docs_caret"; ValueType: string; ValueData: "{app}\org.violet.docs_caret.json"; Flags: uninsdeletekey
+
 [Icons]
 Name: "{autodesktop}\Violet"; Filename: "{app}\Violet.exe"; Parameters: "--control-panel"; WorkingDir: "{app}"; IconFilename: "{app}\Violet.exe"; AppUserModelID: "Violet.DesktopDictation"; Tasks: desktopicon
 Name: "{userstartup}\Violet"; Filename: "{app}\Violet.exe"; Parameters: "--background"; WorkingDir: "{app}"; IconFilename: "{app}\Violet.exe"; AppUserModelID: "Violet.DesktopDictation"; Tasks: startup

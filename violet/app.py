@@ -29,8 +29,16 @@ from PySide6.QtWidgets import (
 
 from .appearance import WINDOW_STYLE
 from .audio import AudioRecorder, list_input_devices
-from .config import Settings, load_settings, model_cache_dir, save_settings, settings_exist
-from .focus import EditableTarget, FocusService, retain_last_caret_anchor
+from .config import Settings, app_data_dir, load_settings, model_cache_dir, save_settings, settings_exist
+from .docs_caret import DocsCaretBridge
+from .focus import (
+    EditableTarget,
+    FieldRect,
+    FocusService,
+    anchor_hidden_target_at_point,
+    anchor_hidden_target_at_rect,
+    retain_last_caret_anchor,
+)
 from .hardware import HardwareProfile, detect_hardware
 from .models import (
     MODEL_SPECS,
@@ -43,6 +51,7 @@ from .models import (
     recommend_model,
 )
 from .overlay import RecoveryWindow, VioletOverlay, violet_icon
+from .pointer import PointerClickTracker
 from .startup import is_startup_enabled, set_startup_enabled
 from .transcribe import WhisperWorker
 from .wininput import insert_at_original_target
@@ -269,6 +278,7 @@ class ControlPanel(QWidget):
     widget_enabled_changed = Signal(bool)
     startup_enabled_changed = Signal(bool)
     transform_enabled_changed = Signal(bool)
+    gpu_acceleration_changed = Signal(bool)
     reset_position_requested = Signal()
     model_selected = Signal(str)
     download_requested = Signal()
@@ -311,6 +321,11 @@ class ControlPanel(QWidget):
         reset_position = QPushButton("Reset position")
         reset_position.setObjectName("violetResetPosition")
         self._startup_enabled = QCheckBox("Start Violet when I sign in")
+        self._gpu_acceleration = QCheckBox("Use NVIDIA GPU acceleration")
+        self._gpu_acceleration.setAccessibleName("Use NVIDIA GPU acceleration")
+        self._gpu_acceleration.setToolTip(
+            "Uses Violet's optional local CUDA runtime after restart. It is faster, and may slightly change recognition output."
+        )
         self._note = QLabel()
         self._note.setObjectName("violetNote")
         self._note.setWordWrap(True)
@@ -323,6 +338,7 @@ class ControlPanel(QWidget):
         self._transform_enabled.toggled.connect(self.transform_enabled_changed)
         reset_position.clicked.connect(self.reset_position_requested)
         self._startup_enabled.toggled.connect(self.startup_enabled_changed)
+        self._gpu_acceleration.toggled.connect(self.gpu_acceleration_changed)
         self._model_choice.currentIndexChanged.connect(self._emit_selected_model)
         self._download_model.clicked.connect(self.download_requested)
         quit_button.clicked.connect(self.quit_requested)
@@ -366,6 +382,7 @@ class ControlPanel(QWidget):
         transform_row.addWidget(reset_position)
         layout.addLayout(transform_row)
         layout.addWidget(self._startup_enabled)
+        layout.addWidget(self._gpu_acceleration)
         layout.addWidget(self._note)
         layout.addStretch()
         footer = QHBoxLayout()
@@ -386,6 +403,7 @@ class ControlPanel(QWidget):
         model_state: str,
         startup_enabled: bool,
         transform_enabled: bool,
+        gpu_acceleration: bool = False,
         note: str = "",
         model_id: str = "large-v3-turbo",
         model_disclosure: str = "",
@@ -435,6 +453,9 @@ class ControlPanel(QWidget):
         self._transform_enabled.setChecked(transform_enabled)
         self._transform_enabled.setEnabled(enabled)
         self._transform_enabled.blockSignals(False)
+        self._gpu_acceleration.blockSignals(True)
+        self._gpu_acceleration.setChecked(gpu_acceleration)
+        self._gpu_acceleration.blockSignals(False)
         self._note.setText(note)
         self._note.setVisible(bool(note))
 
@@ -471,6 +492,10 @@ class VioletController(QObject):
                 self._settings.model_id = self._selected_spec.model_id
                 self._settings.cpu_threads = self._recommendation.cpu_threads
         self._focus = FocusService()
+        self._pointer_clicks = PointerClickTracker()
+        self._last_pointer_click_sequence = 0
+        self._last_hidden_editor_click_at = 0.0
+        self._docs_caret_bridge: DocsCaretBridge | None = None
         self._overlay = VioletOverlay()
         self._recovery = RecoveryWindow()
         self._panel = ControlPanel()
@@ -480,6 +505,7 @@ class VioletController(QObject):
         self._panel.widget_enabled_changed.connect(self.set_widget_enabled)
         self._panel.startup_enabled_changed.connect(self.set_startup_enabled)
         self._panel.transform_enabled_changed.connect(self.set_transform_enabled)
+        self._panel.gpu_acceleration_changed.connect(self.set_gpu_acceleration)
         self._panel.reset_position_requested.connect(self.reset_overlay_position)
         self._panel.model_selected.connect(self.select_model)
         self._panel.download_requested.connect(self.download_selected_model)
@@ -504,6 +530,7 @@ class VioletController(QObject):
         self._panel_note = ""
         self._shutdown_complete: bool | None = None
         self._meter_failure_reported = False
+        self._acceleration_detail = "CPU acceleration"
 
         self._overlay.clicked.connect(self.toggle)
         self._overlay.stop_requested.connect(self._stop_recording)
@@ -518,10 +545,13 @@ class VioletController(QObject):
         self._instance_endpoint = InstanceCommandEndpoint(self.show_control_panel)
         self._hotkey = GlobalHotkey(self.toggle)
         self._app.installNativeEventFilter(self._hotkey)
+        if self._enabled:
+            self._start_docs_caret_bridge()
+            self._pointer_clicks.start()
         if self._hotkey.registered:
             self._hotkey_action.setText("Ctrl+Alt+Space: ready")
         else:
-            self._hotkey_action.setText("Global hotkey unavailable — use the violet mic")
+            self._hotkey_action.setText("Global hotkey unavailable â€” use the violet mic")
         if demo_text is None:
             self._check_local_model()
         else:
@@ -530,9 +560,9 @@ class VioletController(QObject):
 
     def _setup_tray(self) -> None:
         self._tray = QSystemTrayIcon(violet_icon(), self._app)
-        self._tray.setToolTip("Violet — local dictation")
+        self._tray.setToolTip("Violet â€” local dictation")
         menu = QMenu()
-        self._model_action = QAction("Preparing local model…", menu)
+        self._model_action = QAction("Preparing local modelâ€¦", menu)
         self._model_action.setEnabled(False)
         panel_action = QAction("Control panel", menu)
         panel_action.triggered.connect(self.show_control_panel)
@@ -578,7 +608,10 @@ class VioletController(QObject):
         elif spec is None:
             disclosure = "No approved local model is selected."
         elif self._model_state == "ready":
-            disclosure = f"Using local {spec.model_id}. Audio and transcripts stay on this PC."
+            disclosure = (
+                f"Using local {spec.model_id} with {self._acceleration_detail.lower()}. "
+                "Audio and transcripts stay on this PC."
+            )
         elif self._model_state == "switch_pending":
             disclosure = f"{spec.model_id} is ready locally. Restart Violet to use this selected tier."
         elif self._model_state == "checking":
@@ -595,6 +628,7 @@ class VioletController(QObject):
             model_state=self._model_state,
             startup_enabled=startup,
             transform_enabled=self._transform_enabled,
+            gpu_acceleration=self._settings.gpu_acceleration,
             note=self._panel_note,
             model_id=spec.model_id if spec is not None else self._settings.model_id,
             model_disclosure=disclosure,
@@ -614,7 +648,7 @@ class VioletController(QObject):
         ram = profile.total_ram_gib
         ram_text = f"{ram:.0f} GiB RAM" if ram is not None else "RAM unavailable"
         isa = "AVX2" if profile.avx2 else "SSE4.1" if profile.sse41 else "ISA unavailable"
-        return f"Local profile: {cores} CPU cores · {ram_text} · {isa}. {self._recommendation.reason}"
+        return f"Local profile: {cores} CPU cores Â· {ram_text} Â· {isa}. {self._recommendation.reason}"
 
     def set_startup_enabled(self, enabled: bool) -> None:
         try:
@@ -623,6 +657,19 @@ class VioletController(QObject):
         except Exception as error:
             self._panel_note = f"Could not update startup: {error}"
             self._tray.showMessage("Violet", self._panel_note)
+        self._refresh_panel()
+
+    def set_gpu_acceleration(self, enabled: bool) -> None:
+        """Persist an explicit CUDA preference without disrupting dictation."""
+
+        enabled = bool(enabled)
+        if enabled == self._settings.gpu_acceleration:
+            self._refresh_panel()
+            return
+        self._settings.gpu_acceleration = enabled
+        save_settings(self._settings)
+        choice = "GPU acceleration" if enabled else "CPU acceleration"
+        self._panel_note = f"{choice} will apply the next time Violet starts."
         self._refresh_panel()
 
     def set_widget_enabled(self, enabled: bool) -> None:
@@ -655,11 +702,15 @@ class VioletController(QObject):
         self._overlay.hide()
         self._latest_target = None
         if enabled:
+            self._start_docs_caret_bridge()
+            self._pointer_clicks.start()
             if not self._poller.isActive():
                 self._poller.start()
             self._poll_focus()
         else:
             self._poller.stop()
+            self._pointer_clicks.stop()
+            self._stop_docs_caret_bridge()
         self._enabled_action.blockSignals(True)
         self._enabled_action.setChecked(enabled)
         self._enabled_action.blockSignals(False)
@@ -671,9 +722,62 @@ class VioletController(QObject):
             return self._latest_target
         target = self._focus.snapshot()
         if target is not None:
+            target = self._anchor_hidden_target(target)
+            target = retain_last_caret_anchor(self._latest_target, target)
             self._latest_target = target
             self._last_external_target = target
         return target
+
+    def _start_docs_caret_bridge(self) -> None:
+        """Enable optional Docs geometry only while field tracking is enabled."""
+
+        if self._docs_caret_bridge is not None:
+            return
+        bridge = DocsCaretBridge(app_data_dir())
+        try:
+            bridge.start()
+        except OSError:
+            # The extension is optional. Normal UIA placement and the private
+            # click anchor remain available when a local policy blocks a port.
+            return
+        self._docs_caret_bridge = bridge
+
+    def _stop_docs_caret_bridge(self) -> None:
+        bridge, self._docs_caret_bridge = self._docs_caret_bridge, None
+        if bridge is not None:
+            bridge.stop()
+
+    def _anchor_hidden_target(self, target: EditableTarget) -> EditableTarget:
+        """Prefer fresh Docs caret geometry, with a verified click fallback.
+
+        Both sources are geometry-only.  The extension wins once it reports a
+        post-click local cursor; until then the last released click gives a
+        useful compact anchor instead of the entire Docs canvas.
+        """
+
+        if not target.uses_visible_ancestor:
+            return target
+        click = self._pointer_clicks.latest()
+        if click is not None and click.sequence > self._last_pointer_click_sequence:
+            self._last_pointer_click_sequence = click.sequence
+            # Polling occurs after mouse-up. An old click from another app is
+            # never repurposed as a Docs caret anchor.
+            if time.monotonic() - click.observed_at <= 1.5:
+                anchored = anchor_hidden_target_at_point(target, click.x, click.y)
+                if anchored is not target:
+                    target = anchored
+                    self._last_hidden_editor_click_at = click.observed_at
+
+        bridge = self._docs_caret_bridge
+        geometry = bridge.latest() if bridge is not None else None
+        if geometry is None or geometry.received_at < self._last_hidden_editor_click_at:
+            return target
+        mapped = geometry.map_to_visible_target(
+            (target.rect.left, target.rect.top, target.rect.right, target.rect.bottom)
+        )
+        if mapped is None:
+            return target
+        return anchor_hidden_target_at_rect(target, FieldRect(*mapped))
 
     def set_transform_enabled(self, enabled: bool) -> None:
         """Switch the overlay between drag-only placement and normal dictation."""
@@ -753,7 +857,7 @@ class VioletController(QObject):
         if self._model_setup_worker is not None and self._model_setup_worker.isRunning():
             return
         self._model_state = "checking"
-        self._model_action.setText("Checking verified local model…")
+        self._model_action.setText("Checking verified local modelâ€¦")
         self._retry_action.setEnabled(False)
         self._refresh_panel()
         self._start_model_setup(allow_download=False)
@@ -830,7 +934,7 @@ class VioletController(QObject):
         if self._model_setup_worker is not None and self._model_setup_worker.isRunning():
             return
         self._model_state = "downloading"
-        self._model_action.setText(f"Downloading {self._selected_spec.model_id}…")
+        self._model_action.setText(f"Downloading {self._selected_spec.model_id}â€¦")
         self._retry_action.setEnabled(False)
         self._panel_note = "Downloading the selected local model. Violet will be ready to use offline afterward."
         self._refresh_panel()
@@ -858,7 +962,7 @@ class VioletController(QObject):
 
     def _start_worker(self, model_path: str) -> None:
         self._model_state = "loading"
-        self._model_action.setText("Preparing local model…")
+        self._model_action.setText("Preparing local modelâ€¦")
         self._retry_action.setEnabled(False)
         self._refresh_panel()
         worker = WhisperWorker(self._settings, model_path)
@@ -990,12 +1094,15 @@ class VioletController(QObject):
 
     def _on_model_ready(self, model_id: str) -> None:
         self._model_state = "ready"
-        self._model_action.setText(f"Local model ready ({model_id})")
+        worker = self._worker
+        if worker is not None:
+            self._acceleration_detail = worker.acceleration_detail
+        self._model_action.setText(f"Local model ready ({model_id}; {self._acceleration_detail})")
         # VAD belongs to the visual meter, but warming its local ONNX session
         # here keeps a first dictation click responsive.  It is daemonized and
         # does not open the microphone or make a network request.
         self._recorder.prewarm_meter()
-        self._tray.showMessage("Violet ready", "Local punctuation and transcription are ready.")
+        self._tray.showMessage("Violet ready", f"Local punctuation and transcription are ready. {self._acceleration_detail}")
         self._refresh_panel()
 
     def _on_meter_failed(self, _detail: str) -> None:
@@ -1095,6 +1202,7 @@ class VioletController(QObject):
             return
         target = self._focus.snapshot()
         if target is not None:
+            target = self._anchor_hidden_target(target)
             target = retain_last_caret_anchor(self._latest_target, target)
             # A browser can report a transient non-collapsed selection while
             # the user is dragging. Do not move or raise a topmost control
@@ -1130,6 +1238,8 @@ class VioletController(QObject):
         if self._shutdown_complete is not None:
             return self._shutdown_complete
         self._poller.stop()
+        self._pointer_clicks.stop()
+        self._stop_docs_caret_bridge()
         self._requests.clear()
         clean = True
         try:

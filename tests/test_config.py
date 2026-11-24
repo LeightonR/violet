@@ -40,6 +40,7 @@ class ConfigSafetyTests(unittest.TestCase):
                         "cpu_threads": 10_000,
                         "language": "fr",
                         "input_device": -3,
+                        "gpu_acceleration": 1,
                     }
                 ),
                 encoding="utf-8",
@@ -51,6 +52,14 @@ class ConfigSafetyTests(unittest.TestCase):
         self.assertEqual(settings.cpu_threads, MAX_CPU_THREADS)
         self.assertEqual(settings.language, "en")
         self.assertIsNone(settings.input_device)
+        self.assertFalse(settings.gpu_acceleration)
+
+    def test_load_settings_allows_only_boolean_gpu_preference(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"LOCALAPPDATA": directory}):
+            settings_path().write_text(json.dumps({"gpu_acceleration": True}), encoding="utf-8")
+            settings = load_settings()
+
+        self.assertTrue(settings.gpu_acceleration)
 
     def test_existing_settings_are_not_replaced_by_first_run_heuristic(self) -> None:
         from violet.app import initial_settings_for_hardware

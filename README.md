@@ -1,8 +1,8 @@
-<p align="center"><img src="docs/images/violet-020-launch.png" alt="Violet — a little voice, right where you write." width="100%"></p>
+<p align="center"><img src="docs/images/violet-020-launch.png" alt="Violet 0.2.0 — On-device dictation" width="100%"></p>
 
 <p align="center"><strong>Local English dictation for the desktop.</strong></p>
 
-<p align="center">Windows 10/11 x64 · CPU only · Offline after setup · No account · MIT</p>
+<p align="center">Windows 10/11 x64 · macOS and Linux preview · Offline after setup · MIT</p>
 
 <p align="center"><a href="https://github.com/LeightonR/violet/releases/download/v0.2.0/Violet-0.2.0-win64-setup.exe"><strong>Download Violet 0.2.0 for Windows</strong></a> · <a href="https://github.com/LeightonR/violet/releases/download/v0.2.0/Violet-0.2.0-win64-portable.zip">Portable ZIP</a> · <a href="docs/FAQ.md">FAQ</a> · <a href="PRIVACY.md">Privacy</a></p>
 
@@ -37,9 +37,46 @@ if Windows shows an unknown-publisher warning. See [Security](SECURITY.md) for d
 SSE4.1, microphone, space for the app and selected model, and internet for model
 setup. No GPU, API key, or cloud transcription subscription is required.
 
+### Optional NVIDIA acceleration
+
+CPU INT8 remains Violet's default. To use an NVIDIA GPU on Windows, quit Violet
+and run this bundled, per-user installer from PowerShell:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\Programs\Violet\Install-VioletCudaRuntime.ps1"
+```
+
+For the portable ZIP, run the included script from the extracted Violet folder
+instead.
+
+It downloads two pinned NVIDIA CUDA Installer Team wheels from PyPI, verifies
+their SHA-256 values, and extracts only Violet's local CUDA 12 DLLs and licenses
+under `%LOCALAPPDATA%\Violet\runtime\cuda12`. It does not install a CUDA
+Toolkit, change drivers, change the system `PATH`, or affect another app. The
+exact packages are
+[`nvidia-cublas-cu12` 12.9.2.10](https://pypi.org/project/nvidia-cublas-cu12/12.9.2.10/)
+and [`nvidia-cudnn-cu12` 9.28.1.4](https://pypi.org/project/nvidia-cudnn-cu12/9.28.1.4/);
+the [installer source](packaging/Install-VioletCudaRuntime.ps1) records the
+exact file URLs and hashes. It downloads approximately 1.17 GiB and uses about
+1.86 GiB locally.
+
+Restart Violet, enable **Use NVIDIA GPU acceleration** in its control panel,
+then restart once more. Unsupported or unavailable CUDA falls back to CPU. To
+opt out, uncheck the setting and restart; the CPU path remains fully portable.
+
+On the upgrade workstation's RTX 5090, Violet transcribed the padded
+19.451-second benchmark fixture in 0.252 seconds median after warm-up with
+CUDA FP16, compared with 3.638 seconds on CPU INT8. That is a local speed
+measurement, not a general accuracy claim; the two modes can produce a slightly
+different result for ambiguous speech.
+
+## Google Docs on Windows
+
+Click the document body and dictate with the microphone or **Ctrl+Alt+Space**. For precise bubble placement, load the bundled **Violet Docs Caret** extension in Chrome. Open **Manage extensions**, turn on **Developer mode**, choose **Load unpacked** and select `%LOCALAPPDATA%\Programs\Violet\docs-caret`. Reload your open Google Doc. The extension runs only on Google Docs and forwards caret geometry to Violet.
+
 ## macOS and Linux source preview
 
-Install Python 3.12. On Debian or Ubuntu install `libportaudio2` and `python3-venv`. On macOS allow microphone access for the app or terminal launching Violet. From a source checkout run:
+Install Python 3.12. On Debian or Ubuntu install `libportaudio2` and `python3-venv`. On macOS allow microphone access for the app or terminal launching Violet. From a source checkout run the following commands. You can also download the [Python wheel](https://github.com/LeightonR/violet/releases/download/v0.2.0/violet_desktop_dictation-0.2.0-py3-none-any.whl) and pass its local filename in place of the dot in the install command.
 
 ```sh
 python3.12 -m venv .venv
@@ -66,7 +103,7 @@ to your taskbar. Closing the panel leaves Violet in the tray.
 
 <p align="center"><img src="artifacts/violet-control-panel.png" alt="Violet control panel with model selection, pause, Transform, startup, and Quit controls" width="390"></p>
 
-The floating microphone uses a charcoal surface and a lavender waveform. The meter
+The floating microphone keeps its original orchid gradient and waveform. The meter
 shows nine small rounded dots while quiet, growing into thicker warm-violet bars
 when you speak. A sensitive visual level scale makes normal speech use more of
 the available height without changing the recorded audio.

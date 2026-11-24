@@ -7,7 +7,20 @@
 <text x="80" y="446" font-size="30" fill="#d9d2e3">On-device speech recognition</text>
 <text x="1108" y="108" text-anchor="end" font-size="24" fill="#cdb8fc">0.2.0</text>
 </g>
-<g transform="translate(750 210)" fill="#cdb8fc">
-<rect width="365" height="120" rx="60" fill="#393344" stroke="#746885" stroke-width="2"/>
-<g stroke="#cdb8fc" stroke-width="9" stroke-linecap="round"><path d="M52 49l21 22m0-22L52 71M117 56v8m18-19v30m18-44v58m18-45v32m18-25v18m18-43v68m18-53v38m18-28v18"/></g>
-<rect x="291" y="44" width="32" height="32" rx="7" fill="#faf7ff"/></g></svg>
+<defs>
+    <linearGradient id="orchid" x2=".25" y2="1"><stop stop-color="#eac8fa"/><stop offset=".35" stop-color="#dba3ee"/><stop offset="1" stop-color="#aa6ad2"/></linearGradient>
+    <linearGradient id="glass" x2="0" y2="1"><stop stop-color="#fff" stop-opacity=".8"/><stop offset="1" stop-color="#fff" stop-opacity=".12"/></linearGradient>
+</defs>
+<g transform="translate(750 215) scale(1.7) translate(-522 -403)">
+      <rect x="522" y="403" width="210" height="58" rx="29" fill="url(#orchid)" stroke="#b46ac9" stroke-width="1.5"/>
+      <path d="M535 415Q628 400 718 415L718 427Q635 421 535 426Z" fill="url(#glass)" opacity=".62"/>
+      <path d="m545 425 13 13m0-13-13 13" fill="none" stroke="#593267" stroke-width="3.7" stroke-linecap="round"/>
+      <g fill="#6d368f">
+        <rect x="582" y="426" width="5" height="12" rx="2.5"/><rect x="592" y="419" width="5" height="26" rx="2.5"/>
+        <rect x="602" y="416" width="5" height="32" rx="2.5"/><rect x="612" y="423" width="5" height="18" rx="2.5"/>
+        <rect x="622" y="414" width="5" height="36" rx="2.5"/><rect x="632" y="420" width="5" height="24" rx="2.5"/>
+        <rect x="642" y="417" width="5" height="30" rx="2.5"/><rect x="652" y="425" width="5" height="14" rx="2.5"/>
+        <rect x="662" y="422" width="5" height="20" rx="2.5"/>
+      </g>
+      <rect x="695" y="424" width="16" height="16" rx="4" fill="#4b2467"/>
+</g></svg>

@@ -11,8 +11,6 @@ import re
 # because those words can be literal dictated content.
 _SPACE_BEFORE_CLOSING = re.compile(r"\s+([,.;:!?%\]\)}])")
 _SPACE_AFTER_OPENING = re.compile(r"([\[\({])\s+")
-_SPACED_ELLIPSIS = re.compile(r"\s*\.\s*\.\s*\.")
-_SPACED_DECIMAL_OR_GROUP = re.compile(r"(?<=\d)\s*([.,])\s*(?=\d)")
 
 
 def normalize_transcript(text: str) -> str:
@@ -26,7 +24,5 @@ def normalize_transcript(text: str) -> str:
     cleaned = text.strip()
     if not cleaned:
         return ""
-    cleaned = _SPACED_ELLIPSIS.sub("...", cleaned)
-    cleaned = _SPACED_DECIMAL_OR_GROUP.sub(r"\1", cleaned)
     cleaned = _SPACE_BEFORE_CLOSING.sub(r"\1", cleaned)
     return _SPACE_AFTER_OPENING.sub(r"\1", cleaned)

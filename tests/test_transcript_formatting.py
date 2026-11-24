@@ -12,11 +12,11 @@ class TranscriptFormattingTests(unittest.TestCase):
             "Hello,  world!  (ready)",
         )
 
-    def test_repairs_spaced_ellipsis_and_numbers(self) -> None:
-        self.assertEqual(
-            normalize_transcript("Version 3 . 14 costs 1 , 000 . . ."),
-            "Version 3.14 costs 1,000...",
-        )
+    def test_preserves_space_separated_number_list(self) -> None:
+        self.assertEqual(normalize_transcript("1, 2, 3"), "1, 2, 3")
+
+    def test_does_not_join_space_separated_number_fragments(self) -> None:
+        self.assertEqual(normalize_transcript("2025. 2026"), "2025. 2026")
 
     def test_does_not_invent_spoken_punctuation(self) -> None:
         self.assertEqual(
