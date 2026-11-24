@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2 — Google Docs setup
+
+- Added a guided setup in the Windows control panel with the registered extension folder, a copy button and a caret check. The installer and GitHub guide cover activation, updates and troubleshooting.
+
 ## 0.2.1 — Desktop dictation
 
 - Updated Google Docs caret tracking across line breaks, cursor blinks and collaborator movement.

@@ -113,7 +113,7 @@ with Enter.
 
 ### How do I update without downloading my model again?
 
-Quit Violet, then run [the current Windows installer](https://github.com/LeightonR/violet/releases/download/v0.2.1/Violet-0.2.1-win64-setup.exe).
+Quit Violet, then run [the current Windows installer](https://github.com/LeightonR/violet/releases/download/v0.2.2/Violet-0.2.2-win64-setup.exe).
 It replaces the application while preserving settings, saved placement, and the
 model cache. For the portable edition, extract the new ZIP into its own folder;
 do not mix files from different versions. Run only one copy at a time.
@@ -121,7 +121,7 @@ do not mix files from different versions. Run only one copy at a time.
 ### Why is Windows showing an unknown-publisher warning?
 
 The current release is unsigned. Check that you downloaded it from the project's
-[GitHub Releases page](https://github.com/LeightonR/violet/releases/tag/v0.2.1)
+[GitHub Releases page](https://github.com/LeightonR/violet/releases/tag/v0.2.2)
 and compare its published SHA-256. Do not disable Windows
 security globally. See [Security](../SECURITY.md).
 
@@ -145,6 +145,10 @@ Include your version, application name, and steps using dummy text. Keep private
 recordings, transcripts, and screenshots out of public reports. Security concerns
 belong in the [private reporting channel](https://github.com/LeightonR/violet/security/advisories/new).
 
-Share the [official release](https://github.com/LeightonR/violet/releases/tag/v0.2.1)
+Share the [official release](https://github.com/LeightonR/violet/releases/tag/v0.2.2)
 or use the [Violet launch card](images/violet-011-launch.png). Violet is an
 independent project; it is not affiliated with OpenAI or Microsoft.
+
+## How do I set up Google Docs?
+
+Choose **Set up Google Docs** in the Windows control panel. See the [setup guide](GOOGLE-DOCS.md) for Chrome activation, updates and troubleshooting.

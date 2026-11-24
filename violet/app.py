@@ -31,6 +31,7 @@ from .appearance import WINDOW_STYLE
 from .audio import AudioRecorder, list_input_devices
 from .config import Settings, app_data_dir, load_settings, model_cache_dir, save_settings, settings_exist
 from .docs_caret import DocsCaretBridge
+from .docs_setup import show_docs_setup
 from .focus import (
     EditableTarget,
     FieldRect,
@@ -390,6 +391,10 @@ class ControlPanel(QWidget):
         footer = QHBoxLayout()
         footer.addWidget(quit_button)
         footer.addStretch()
+        docs_setup = QPushButton("Set up Google Docs")
+        docs_setup.setObjectName("textButton")
+        docs_setup.clicked.connect(lambda: show_docs_setup(self))
+        footer.addWidget(docs_setup)
         footer.addWidget(close_button)
         layout.addLayout(footer)
 
