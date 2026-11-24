@@ -2,6 +2,7 @@
 
 ## 0.2.1 — Desktop dictation
 
+- Updated Google Docs caret tracking across line breaks, cursor blinks and collaborator movement.
 - Updated Windows browser target detection for hidden typing frames and editable search controls.
 - Redesigned the control panel and scaled the original microphone bubble down by 20%.
 - Added a macOS and Linux source preview with local recording, transcription and clipboard output.

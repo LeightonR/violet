@@ -270,8 +270,15 @@ class DocsCaretBridge:
 
     def publish(self, geometry: DocsCaretGeometry) -> None:
         with self._lock:
-            if not self._stopped:
-                self._latest = geometry
+            if self._stopped:
+                return
+            previous = self._latest
+            # Native-messaging delivery is normally ordered, but a reconnect
+            # can leave one buffered packet behind. A same-session older
+            # sequence must never pull the overlay back to a prior Docs line.
+            if previous is not None and previous.session == geometry.session and geometry.sequence <= previous.sequence:
+                return
+            self._latest = geometry
 
     def clear(self) -> None:
         with self._lock:

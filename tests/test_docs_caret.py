@@ -51,6 +51,22 @@ class DocsCaretGeometryTests(unittest.TestCase):
 
 
 class DocsCaretBridgeTests(unittest.TestCase):
+    def test_same_session_out_of_order_packet_cannot_restore_prior_line(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            bridge = DocsCaretBridge(Path(temporary))
+            newest = parse_caret_message(caret_payload(sequence=8, top=280.0, bottom=297.0), received_at=10.0)
+            older = parse_caret_message(caret_payload(sequence=7, top=240.0, bottom=257.0), received_at=10.1)
+            assert newest is not None and older is not None
+
+            bridge.publish(newest)
+            bridge.publish(older)
+
+            current = bridge.latest(now=10.2)
+            self.assertIsNotNone(current)
+            assert current is not None
+            self.assertEqual(current.sequence, 8)
+            self.assertEqual(current.top, 280.0)
+
     def test_authenticated_loopback_bridge_accepts_geometry_and_removes_own_descriptor(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

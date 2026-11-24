@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import threading
 import time
@@ -18,7 +19,7 @@ from PySide6.QtWidgets import QApplication
 
 from violet.audio import SpeechMeter, _get_vad_model, resample_to_16khz
 from violet.focus import FieldRect
-from violet.overlay import QUIET_DOT_SIZE, VioletOverlay
+from violet.overlay import OVERLAY_SCALE, QUIET_DOT_SIZE, VioletOverlay
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -231,11 +232,13 @@ class WaveformAndSpringTests(unittest.TestCase):
             self.assertEqual(len(groups), 9)
             # Quiet dots are deliberately larger than the earlier 2.2px mark
             # but remain nine individually separated rounded squares.
-            self.assertEqual(QUIET_DOT_SIZE, 3.2)
-            self.assertTrue(all(len(group) <= 5 * dpr for group in groups))
-            self.assertGreaterEqual(max(len(group) for group in groups), max(3, int(3 * dpr)))
-            self.assertGreaterEqual(len(occupied_rows), max(3, int(3 * dpr)))
-            self.assertLessEqual(len(occupied_rows), 5 * dpr)
+            self.assertEqual(QUIET_DOT_SIZE, 3.2 * OVERLAY_SCALE)
+            maximum_dot_pixels = max(2, math.ceil((QUIET_DOT_SIZE + 1.5) * dpr))
+            minimum_dot_pixels = max(2, math.floor(QUIET_DOT_SIZE * dpr))
+            self.assertTrue(all(len(group) <= maximum_dot_pixels for group in groups))
+            self.assertGreaterEqual(max(len(group) for group in groups), minimum_dot_pixels)
+            self.assertGreaterEqual(len(occupied_rows), minimum_dot_pixels)
+            self.assertLessEqual(len(occupied_rows), maximum_dot_pixels)
             for _ in range(10):
                 overlay._tick()
             QTest.qWait(12)
@@ -298,20 +301,20 @@ class WaveformAndSpringTests(unittest.TestCase):
         try:
             overlay.set_state("recording")
             # Every intermediate width that the property animation may render
-            # keeps the 42px mic lane free. The clipped waveform must also end
+            # keeps the scaled mic lane free. The clipped waveform must also end
             # before the stop button, rather than relying on paint order.
-            mic_lane = QRectF(0, 0, 42, 42)
-            for width in range(42, overlay._widths["recording"] + 1, 7):
-                overlay.resize(width, 42)
+            mic_lane = QRectF(0, 0, overlay._bubble_size, overlay._bubble_size)
+            for width in range(overlay._bubble_size, overlay._widths["recording"] + 1, 6):
+                overlay.resize(width, overlay._bubble_size)
                 waveform, stop = overlay._recording_layout()
                 if stop is not None:
-                    self.assertGreaterEqual(stop.left(), 48.0)
+                    self.assertGreaterEqual(stop.left(), mic_lane.right() + 4.0)
                     self.assertFalse(stop.intersects(mic_lane))
                 if waveform is not None:
-                    self.assertGreaterEqual(waveform.left(), 48.0)
+                    self.assertGreaterEqual(waveform.left(), mic_lane.right() + 4.0)
                     self.assertFalse(waveform.intersects(mic_lane))
                     if stop is not None:
-                        self.assertLessEqual(waveform.right(), stop.left() - 6.0)
+                        self.assertLessEqual(waveform.right(), stop.left() - 4.0)
         finally:
             self._close(overlay)
 

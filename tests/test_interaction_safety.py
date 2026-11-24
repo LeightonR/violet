@@ -5,6 +5,16 @@ import unittest
 
 
 class OverlayClickSafetyTests(unittest.TestCase):
+    def test_every_overlay_state_uses_the_compact_design_scale(self) -> None:
+        from violet.overlay import OVERLAY_DIAMETER, OVERLAY_SCALE, VioletOverlay
+
+        self.assertEqual(OVERLAY_SCALE, 0.80)
+        self.assertEqual(OVERLAY_DIAMETER, 34)
+        self.assertEqual(
+            VioletOverlay._widths,
+            {"idle": 34, "recording": 126, "transcribing": 67, "ready": 110, "error": 34},
+        )
+
     def test_only_a_stationary_overlay_press_can_toggle(self) -> None:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PySide6.QtCore import QEvent, QPointF, Qt
@@ -15,7 +25,7 @@ class OverlayClickSafetyTests(unittest.TestCase):
 
         app = QApplication.instance() or QApplication([])
         overlay = VioletOverlay()
-        overlay.setGeometry(0, 0, 42, 42)
+        overlay.setGeometry(0, 0, overlay._bubble_size, overlay._bubble_size)
         toggles: list[bool] = []
         overlay.clicked.connect(lambda: toggles.append(True))
 
@@ -96,32 +106,38 @@ class OverlayClickSafetyTests(unittest.TestCase):
             overlay.mouseReleaseEvent(event(QEvent.Type.MouseButtonRelease, position, Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton))
 
         overlay.set_state("recording")
-        overlay.setGeometry(0, 0, overlay._widths["recording"], 42)
+        overlay.setGeometry(0, 0, overlay._widths["recording"], overlay._bubble_size)
         waveform, stop = overlay._recording_layout()
         self.assertIsNotNone(waveform)
         self.assertIsNotNone(stop)
+        cancel = overlay._cancel_hit_rect()
+        self.assertFalse(cancel.intersects(waveform))  # type: ignore[arg-type]
+        self.assertFalse(cancel.intersects(stop))  # type: ignore[arg-type]
 
         # The live meter itself is deliberately inert: only the left X can
         # discard and only the right square can finish-and-insert.
-        click((70, 21))
+        click((waveform.center().x(), waveform.center().y()))  # type: ignore[union-attr]
         self.assertEqual(actions, [])
-        click((22, 21))
+        click((cancel.center().x(), cancel.center().y()))
         self.assertEqual(actions, ["cancel"])
         click((stop.center().x(), stop.center().y()))  # type: ignore[union-attr]
         self.assertEqual(actions, ["cancel", "stop"])
 
         # Dragging away from X remains a no-op, preserving selection safety.
-        overlay.mousePressEvent(event(QEvent.Type.MouseButtonPress, (22, 21), Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton))
-        overlay.mouseMoveEvent(event(QEvent.Type.MouseMove, (40, 21), Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton))
-        overlay.mouseReleaseEvent(event(QEvent.Type.MouseButtonRelease, (40, 21), Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton))
+        cancel_center = (cancel.center().x(), cancel.center().y())
+        dragged = (cancel_center[0] + overlay._bubble_size, cancel_center[1])
+        overlay.mousePressEvent(event(QEvent.Type.MouseButtonPress, cancel_center, Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton))
+        overlay.mouseMoveEvent(event(QEvent.Type.MouseMove, dragged, Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton))
+        overlay.mouseReleaseEvent(event(QEvent.Type.MouseButtonRelease, dragged, Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton))
         self.assertEqual(actions, ["cancel", "stop"])
 
         # While Whisper is still working, X remains a cancel-only control;
         # neither a spinner nor an arbitrary click can start another request.
         overlay.set_state("transcribing")
-        overlay.setGeometry(0, 0, overlay._widths["transcribing"], 42)
-        click((22, 21))
-        click((60, 21))
+        overlay.setGeometry(0, 0, overlay._widths["transcribing"], overlay._bubble_size)
+        cancel = overlay._cancel_hit_rect()
+        click((cancel.center().x(), cancel.center().y()))
+        click((overlay.width() - 2, overlay.height() / 2))
         self.assertEqual(actions, ["cancel", "stop", "cancel"])
         overlay.deleteLater()
         app.processEvents()

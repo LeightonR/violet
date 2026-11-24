@@ -91,6 +91,8 @@ shell32 = ctypes.WinDLL("shell32", use_last_error=True)
 shell32.SetCurrentProcessExplicitAppUserModelID.argtypes = (ctypes.c_wchar_p,)
 shell32.SetCurrentProcessExplicitAppUserModelID.restype = ctypes.c_long
 CONTROL_PANEL_MESSAGE = user32.RegisterWindowMessageW(INSTANCE_COMMAND_WINDOW_TITLE)
+NORMAL_FOCUS_POLL_INTERVAL_MS = 220
+HIDDEN_BROWSER_FOCUS_POLL_INTERVAL_MS = 50
 
 
 class _POINT(ctypes.Structure):
@@ -537,7 +539,7 @@ class VioletController(QObject):
         self._overlay.cancel_requested.connect(self.cancel_dictation)
         self._overlay.placement_saved.connect(self._on_placement_saved)
         self._poller = QTimer(self)
-        self._poller.setInterval(220)
+        self._poller.setInterval(NORMAL_FOCUS_POLL_INTERVAL_MS)
         self._poller.timeout.connect(self._poll_focus)
         if self._enabled:
             self._poller.start()
@@ -704,6 +706,7 @@ class VioletController(QObject):
         if enabled:
             self._start_docs_caret_bridge()
             self._start_pointer_click_tracking()
+            self._set_focus_poll_interval(NORMAL_FOCUS_POLL_INTERVAL_MS)
             if not self._poller.isActive():
                 self._poller.start()
             self._poll_focus()
@@ -786,6 +789,12 @@ class VioletController(QObject):
         if mapped is None:
             return target
         return anchor_hidden_target_at_rect(target, FieldRect(*mapped))
+
+    def _set_focus_poll_interval(self, interval_ms: int) -> None:
+        """Poll hidden browser editors quickly without taxing normal fields."""
+
+        if self._poller.interval() != interval_ms:
+            self._poller.setInterval(interval_ms)
 
     def set_transform_enabled(self, enabled: bool) -> None:
         """Switch the overlay between drag-only placement and normal dictation."""
@@ -1210,6 +1219,11 @@ class VioletController(QObject):
             return
         target = self._focus.snapshot()
         if target is not None:
+            self._set_focus_poll_interval(
+                HIDDEN_BROWSER_FOCUS_POLL_INTERVAL_MS
+                if target.uses_visible_ancestor
+                else NORMAL_FOCUS_POLL_INTERVAL_MS
+            )
             target = self._anchor_hidden_target(target)
             target = retain_last_caret_anchor(self._latest_target, target)
             # A browser can report a transient non-collapsed selection while
@@ -1221,6 +1235,7 @@ class VioletController(QObject):
             self._latest_target = target
             self._last_external_target = target
         else:
+            self._set_focus_poll_interval(NORMAL_FOCUS_POLL_INTERVAL_MS)
             # A control-panel click naturally replaces keyboard focus. In
             # Transform mode the retained identity/rect is safe to use only as
             # a visual anchor; it is never accepted for dictation insertion.

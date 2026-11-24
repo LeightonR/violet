@@ -69,7 +69,7 @@ def main() -> int:
     # effectively invisible during the measurement but is still exposed to the
     # Windows compositor, unlike the offscreen renderer.
     overlay.setWindowOpacity(0.01)
-    overlay.setGeometry(20, 20, overlay._widths["idle"], 42)
+    overlay.setGeometry(20, 20, overlay._widths["idle"], overlay._bubble_size)
     overlay.show()
 
     started_at = 0.0
