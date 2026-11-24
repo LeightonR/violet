@@ -1,4 +1,4 @@
-# Third-party notices for Violet 0.1.1
+# Third-party notices for Violet 0.2.0
 
 The portable ZIP and installer contain the listed Python/Qt runtime components.
 The release build also emits `SBOM.spdx.json` and `dependency-manifest.json` with

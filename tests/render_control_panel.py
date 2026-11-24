@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from PySide6.QtGui import QColor, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFontDatabase, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication
 
 from violet.app import ControlPanel
@@ -16,6 +17,10 @@ from violet.app import ControlPanel
 
 def main() -> int:
     app = QApplication([])
+    if sys.platform == "win32" and not QFontDatabase.families():
+        fonts = Path(os.environ["WINDIR"]) / "Fonts"
+        for name in ("segoeui.ttf", "seguisb.ttf"):
+            assert QFontDatabase.addApplicationFont(str(fonts / name)) >= 0
     panel = ControlPanel()
     # Public, app-owned preview data only: no local device names, paths, or
     # machine-specific identifiers are captured in the README artifact.

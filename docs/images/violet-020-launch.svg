@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="540" viewBox="0 0 1200 540">
+<title>Violet 0.2 — On-device dictation</title>
+<rect width="1200" height="540" fill="#292537"/>
+<g font-family="Segoe UI, sans-serif">
+<text x="76" y="108" font-size="24" fill="#cdb8fc" letter-spacing="2">DESKTOP DICTATION</text>
+<text x="66" y="331" font-size="190" font-weight="600" fill="#faf7ff">Violet</text>
+<text x="80" y="446" font-size="30" fill="#d9d2e3">On-device speech recognition</text>
+<text x="1108" y="108" text-anchor="end" font-size="24" fill="#cdb8fc">0.2.0</text>
+</g>
+<g transform="translate(750 210)" fill="#cdb8fc">
+<rect width="365" height="120" rx="60" fill="#393344" stroke="#746885" stroke-width="2"/>
+<g stroke="#cdb8fc" stroke-width="9" stroke-linecap="round"><path d="M52 49l21 22m0-22L52 71M117 56v8m18-19v30m18-44v58m18-45v32m18-25v18m18-43v68m18-53v38m18-28v18"/></g>
+<rect x="291" y="44" width="32" height="32" rx="7" fill="#faf7ff"/></g></svg>

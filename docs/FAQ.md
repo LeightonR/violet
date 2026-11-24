@@ -9,8 +9,7 @@ is local.
 ### Does it run on my version of Windows?
 
 The release targets 64-bit Windows 10 (version 1809 or later) and Windows 11.
-It is not a Windows ARM64, Windows 7/8, Linux, or macOS release. Hardware and
-accessibility support still vary by computer and application.
+The Windows installer requires x64. Linux and macOS have a separate source preview with a recording window and a Copy transcript button. See the [installation instructions](../README.md#macos-and-linux-source-preview).
 
 ### Will it appear beside every input?
 
@@ -23,8 +22,8 @@ dictation. The app never guesses an insertion target.
 ### Where does the microphone sit?
 
 By default, just left of the active text row. Open the control panel, enable
-**Transform position**, drag the microphone into your preferred position, then
-uncheck Transform. That relative alignment and gap follow other inputs.
+**Allow dragging**, drag the microphone into your preferred position, then
+turn Allow dragging off. That relative alignment and gap follow other inputs.
 **Reset position** restores the default. During text selection Violet holds
 the last valid caret position rather than jumping to the center of the box.
 
@@ -82,7 +81,7 @@ with Enter.
 
 ### How do I update without downloading my model again?
 
-Quit Violet, then run [the current Windows installer](https://github.com/LeightonR/violet/releases/download/v0.1.1/Violet-0.1.1-win64-setup.exe).
+Quit Violet, then run [the current Windows installer](https://github.com/LeightonR/violet/releases/download/v0.2.0/Violet-0.2.0-win64-setup.exe).
 It replaces the application while preserving settings, saved placement, and the
 model cache. For the portable edition, extract the new ZIP into its own folder;
 do not mix files from different versions. Run only one copy at a time.
@@ -90,7 +89,7 @@ do not mix files from different versions. Run only one copy at a time.
 ### Why is Windows showing an unknown-publisher warning?
 
 The current release is unsigned. Check that you downloaded it from the project's
-[GitHub Releases page](https://github.com/LeightonR/violet/releases/tag/v0.1.1)
+[GitHub Releases page](https://github.com/LeightonR/violet/releases/tag/v0.2.0)
 and compare its published SHA-256. Do not disable Windows
 security globally. See [Security](../SECURITY.md).
 
@@ -114,6 +113,6 @@ Include your version, application name, and steps using dummy text. Keep private
 recordings, transcripts, and screenshots out of public reports. Security concerns
 belong in the [private reporting channel](https://github.com/LeightonR/violet/security/advisories/new).
 
-Share the [official release](https://github.com/LeightonR/violet/releases/tag/v0.1.1)
+Share the [official release](https://github.com/LeightonR/violet/releases/tag/v0.2.0)
 or use the [Violet launch card](images/violet-011-launch.png). Violet is an
 independent project; it is not affiliated with OpenAI or Microsoft.

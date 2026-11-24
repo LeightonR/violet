@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "violet-desktop-dictation"
-version = "0.1.1"
-description = "Local Windows desktop dictation"
+version = "0.2.0"
+description = "Local desktop dictation"
 requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
 classifiers = [
@@ -20,8 +20,8 @@ dependencies = [
     "faster-whisper==1.2.1",
     "scipy==1.14.1",
     "sounddevice==0.5.3",
-    "uiautomation==2.0.29",
-    "pywin32==311",
+    "uiautomation==2.0.29; sys_platform == 'win32'",
+    "pywin32==311; sys_platform == 'win32'",
 ]
 
 [tool.setuptools]

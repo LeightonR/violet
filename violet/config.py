@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
@@ -23,7 +24,12 @@ class Settings:
 
 
 def app_data_dir() -> Path:
-    root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    if sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support"
+    elif sys.platform == "win32":
+        root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    else:
+        root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     path = root / APP_NAME
     path.mkdir(parents=True, exist_ok=True)
     return path

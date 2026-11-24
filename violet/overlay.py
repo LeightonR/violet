@@ -7,7 +7,8 @@ import math
 from collections import deque
 
 from PySide6.QtCore import QElapsedTimer, QEvent, QPoint, QPointF, QRect, QRectF, QTimer, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QLinearGradient, QPainter, QPen, QPixmap
+from .appearance import WINDOW_STYLE
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 
 from .focus import FieldRect
@@ -93,16 +94,10 @@ def violet_icon() -> QIcon:
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    gradient = QLinearGradient(8, 6, 56, 58)
-    gradient.setColorAt(0, QColor("#eac8fa"))
-    gradient.setColorAt(0.52, QColor("#dba3ee"))
-    gradient.setColorAt(1, QColor("#aa6ad2"))
-    painter.setBrush(gradient)
-    painter.setPen(QPen(QColor("#b46ac9"), 2))
+    painter.setBrush(QColor("#292537"))
+    painter.setPen(QPen(QColor("#a99bd0"), 2))
     painter.drawEllipse(QRectF(4, 4, 56, 56))
-    painter.setPen(QPen(QColor(255, 255, 255, 190), 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-    painter.drawArc(QRectF(10, 8, 43, 25), 28 * 16, 118 * 16)
-    painter.setPen(QPen(QColor("#3b2054"), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    painter.setPen(QPen(QColor("#ede7ff"), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
     painter.drawRoundedRect(QRectF(28.5, 21, 7, 14), 3.5, 3.5)
     painter.drawArc(QRectF(23, 28, 18, 14), 0, -180 * 16)
     painter.drawLine(32, 42, 32, 46)
@@ -650,27 +645,13 @@ class VioletOverlay(QWidget):
         edge_width = self._stroke_width(1.0)
         inset = edge_width / 2.0 + 1.0 / max(1.0, self.devicePixelRatioF())
         body = QRectF(inset, inset, width - 2.0 * inset, height - 2.0 * inset)
-        gradient = QLinearGradient(body.topLeft(), body.bottomRight())
-        gradient.setColorAt(0, QColor("#eac8fa"))
-        gradient.setColorAt(0.34, QColor("#dba3ee"))
-        gradient.setColorAt(0.68, QColor("#bd80e4"))
-        gradient.setColorAt(1, QColor("#aa6ad2"))
-        painter.setBrush(gradient)
-        edge = QColor("#b46ac9") if self._state != "error" else QColor("#c85388")
+        painter.setBrush(QColor("#292537"))
+        edge = QColor("#8f839e") if self._state != "error" else QColor("#ff9eaa")
         painter.setPen(QPen(edge, edge_width))
         painter.drawRoundedRect(body, 20, 20)
-
-        # A single lilac rim and white gloss keep the control warm and crisp at
-        # small sizes.  There are no cyan/teal subpixel accents to fringe on a
-        # high-DPI monitor.
-        painter.setBrush(QColor(255, 255, 255, 115))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(QRectF(6, 5, width - 12, 14), 8, 8)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor(255, 255, 255, 205), self._stroke_width(1.0), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        painter.drawArc(QRectF(7, 5, max(20, width - 14), 22), 28 * 16, 128 * 16)
         if self._transform_enabled:
-            painter.setPen(QPen(QColor(89, 45, 119, 90), self._stroke_width(1.0), Qt.PenStyle.DotLine))
+            painter.setPen(QPen(QColor(212, 193, 255, 150), self._stroke_width(1.0), Qt.PenStyle.DotLine))
             painter.drawRoundedRect(body.adjusted(4, 4, -4, -4), 16, 16)
         if self._state in {"recording", "transcribing"}:
             self._draw_cancel(painter, 22, 21)
@@ -684,7 +665,7 @@ class VioletOverlay(QWidget):
         elif self._state == "ready":
             self._draw_label(painter, self._message or "Text ready")
         elif self._state == "error":
-            painter.setBrush(QColor("#c04d86"))
+            painter.setBrush(QColor("#ff9eaa"))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(QRectF(30, 17, 5, 5))
         painter.end()
@@ -709,7 +690,7 @@ class VioletOverlay(QWidget):
         return round(position) / dpr
 
     def _draw_mic(self, painter: QPainter, center_x: float, center_y: float) -> None:
-        color = QColor("#3d2056") if self._state != "recording" else QColor("#4e2768")
+        color = QColor("#f5f0ff") if self._state != "recording" else QColor("#e7def9")
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(color, self._stroke_width(1.8), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         painter.drawRoundedRect(QRectF(center_x - 3, center_y - 8, 6, 11), 3, 3)
@@ -721,7 +702,7 @@ class VioletOverlay(QWidget):
         """Draw the explicit discard action used while audio is in flight."""
 
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor("#4e2768"), self._stroke_width(2.5), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.setPen(QPen(QColor("#e7def9"), self._stroke_width(2.5), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         painter.drawLine(int(center_x - 5), int(center_y - 5), int(center_x + 5), int(center_y + 5))
         painter.drawLine(int(center_x + 5), int(center_y - 5), int(center_x - 5), int(center_y + 5))
 
@@ -752,7 +733,7 @@ class VioletOverlay(QWidget):
                     # listening. It never creates audio targets or animation.
                     dot_x = self._stroke_center(x, dot_size)
                     dot_y = self._stroke_center(waveform.center().y(), dot_size)
-                    painter.setBrush(QColor(109, 54, 143, 160))
+                    painter.setBrush(QColor(198, 182, 222, 220))
                     painter.drawRoundedRect(
                         QRectF(dot_x - dot_size / 2, dot_y - dot_size / 2, dot_size, dot_size),
                         dot_size / 2, dot_size / 2,
@@ -762,14 +743,14 @@ class VioletOverlay(QWidget):
                 # the lane. Rounded filled capsules keep their total height
                 # bounded, including the caps, and leave clear gaps between bars.
                 height = bar_width + (waveform.height() - 2.0 - bar_width) * level
-                painter.setBrush(QColor("#6d368f"))
+                painter.setBrush(QColor("#cdb8fc"))
                 painter.drawRoundedRect(
                     QRectF(x - bar_width / 2, center_y - height / 2, bar_width, height),
                     bar_width / 2, bar_width / 2,
                 )
             painter.restore()
         if stop is not None:
-            painter.setBrush(QColor("#4b2467"))
+            painter.setBrush(QColor("#faf7ff"))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(stop, 3, 3)
 
@@ -814,12 +795,12 @@ class VioletOverlay(QWidget):
 
     def _draw_spinner(self, painter: QPainter) -> None:
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor("#744094"), self._stroke_width(2.0), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.setPen(QPen(QColor("#cdb8fc"), self._stroke_width(2.0), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         angle = int(self._phase % 360)
         painter.drawArc(QRectF(self.width() - 28, 13, 16, 16), angle * 16, 230 * 16)
 
     def _draw_label(self, painter: QPainter, text: str, x: int = 45) -> None:
-        painter.setPen(QColor("#352046"))
+        painter.setPen(QColor("#faf7ff"))
         font = QFont("Segoe UI", 9)
         font.setWeight(QFont.Weight.DemiBold)
         painter.setFont(font)
@@ -880,22 +861,20 @@ class RecoveryWindow(QWidget):
         self.setWindowTitle("Violet — text ready")
         self.setWindowIcon(violet_icon())
         self.setMinimumSize(460, 230)
-        self.setStyleSheet(
-            "QWidget { background: #1d0d30; color: #f1e9ff; }"
-            "QPlainTextEdit { background: #10071b; border: 1px solid #a785ef; border-radius: 9px; padding: 8px; color: #fbf7ff; }"
-            "QPushButton { background: #6a3f9f; border: 1px solid #c7aaff; border-radius: 9px; padding: 7px 13px; color: white; }"
-            "QPushButton:hover { background: #7c4db8; }"
-        )
+        self.setStyleSheet(WINDOW_STYLE)
         layout = QVBoxLayout(self)
-        heading = QLabel("Violet kept your text safe")
-        heading.setStyleSheet("font-size: 15px; font-weight: 600; color: #9cecff;")
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(10)
+        heading = QLabel("Your transcript")
+        heading.setObjectName("sectionHeading")
         self._detail = QLabel()
         self._detail.setWordWrap(True)
         self._text = QPlainTextEdit()
         self._text.setReadOnly(True)
         buttons = QHBoxLayout()
         buttons.addStretch()
-        copy = QPushButton("Copy")
+        copy = QPushButton("Copy transcript")
+        copy.setObjectName("primary")
         close = QPushButton("Close")
         copy.clicked.connect(self._copy)
         close.clicked.connect(self.hide)

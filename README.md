@@ -1,10 +1,10 @@
-<p align="center"><img src="docs/images/violet-hero.svg" alt="Violet — a little voice, right where you write." width="100%"></p>
+<p align="center"><img src="docs/images/violet-020-launch.png" alt="Violet — a little voice, right where you write." width="100%"></p>
 
-<p align="center"><strong>Local voice dictation for Windows. A small purple companion beside your cursor.</strong></p>
+<p align="center"><strong>Local English dictation for the desktop.</strong></p>
 
 <p align="center">Windows 10/11 x64 · CPU only · Offline after setup · No account · MIT</p>
 
-<p align="center"><a href="https://github.com/LeightonR/violet/releases/download/v0.1.1/Violet-0.1.1-win64-setup.exe"><strong>Download Violet 0.1.1 for Windows</strong></a> · <a href="https://github.com/LeightonR/violet/releases/download/v0.1.1/Violet-0.1.1-win64-portable.zip">Portable ZIP</a> · <a href="docs/FAQ.md">FAQ</a> · <a href="PRIVACY.md">Privacy</a></p>
+<p align="center"><a href="https://github.com/LeightonR/violet/releases/download/v0.2.0/Violet-0.2.0-win64-setup.exe"><strong>Download Violet 0.2.0 for Windows</strong></a> · <a href="https://github.com/LeightonR/violet/releases/download/v0.2.0/Violet-0.2.0-win64-portable.zip">Portable ZIP</a> · <a href="docs/FAQ.md">FAQ</a> · <a href="PRIVACY.md">Privacy</a></p>
 
 Click a text field. Violet appears just to the left of the active text row.
 Click the microphone, speak, then click the square Stop control. Your words
@@ -17,8 +17,8 @@ initial dictation language.
 
 ## Install
 
-1. Download [Violet 0.1.1 Setup](https://github.com/LeightonR/violet/releases/download/v0.1.1/Violet-0.1.1-win64-setup.exe)
-   for Windows x64. A [portable ZIP](https://github.com/LeightonR/violet/releases/download/v0.1.1/Violet-0.1.1-win64-portable.zip)
+1. Download [Violet 0.2.0 Setup](https://github.com/LeightonR/violet/releases/download/v0.2.0/Violet-0.2.0-win64-setup.exe)
+   for Windows x64. A [portable ZIP](https://github.com/LeightonR/violet/releases/download/v0.2.0/Violet-0.2.0-win64-portable.zip)
    is also provided; extract the entire ZIP before launching. No Python installation is needed.
 2. Run Setup as your normal user. It installs Violet for your account, adds
    shortcuts, and enables startup at sign-in by default.
@@ -30,22 +30,24 @@ initial dictation language.
 Updating? Quit Violet and run the new Setup. Your settings, relative placement,
 and downloaded models are preserved.
 
-The current release is unsigned. Verify the [release checksums](https://github.com/LeightonR/violet/releases/download/v0.1.1/SHA256SUMS.txt)
+The current release is unsigned. Verify the [release checksums](https://github.com/LeightonR/violet/releases/download/v0.2.0/SHA256SUMS.txt)
 if Windows shows an unknown-publisher warning. See [Security](SECURITY.md) for details.
 
 **Requirements:** Windows 10 version 1809 or later / Windows 11, x64 CPU with
 SSE4.1, microphone, space for the app and selected model, and internet for model
 setup. No GPU, API key, or cloud transcription subscription is required.
 
-## New in 0.1.1: tiny bubble, big voice
+## macOS and Linux source preview
 
-<p align="center"><img src="docs/images/violet-011-launch.png" alt="Violet 0.1.1 — Tiny bubble. Big voice. Think it. Say it. Keep going." width="800"></p>
+Install Python 3.12. On Debian or Ubuntu install `libportaudio2` and `python3-venv`. On macOS allow microphone access for the app or terminal launching Violet. From a source checkout run:
 
-The warm-purple bubble now springs open into a clearer, more responsive speaking
-meter. Quiet listening shows rounded dots; your voice grows them into thicker,
-taller bars. An X lets you discard a thought, while the square Stop button
-finishes and inserts it. See the [release notes](https://github.com/LeightonR/violet/releases/tag/v0.1.1)
-and [changelog](CHANGELOG.md) for the fixes and checks behind the polish.
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install .
+.venv/bin/python -m violet
+```
+
+Download the displayed English model once. Choose **Start recording**, speak, then **Finish recording**. Choose **Copy transcript** and paste into the destination. The floating microphone, global shortcut and automatic insertion below are Windows features.
 
 ## Small controls, useful details
 
@@ -54,17 +56,17 @@ and [changelog](CHANGELOG.md) for the fixes and checks behind the polish.
 | Floating microphone | Start recording; X discards; the square Stop control transcribes and inserts. |
 | Ctrl+Alt+Space | Start or finish dictation from the keyboard; unsupported fields use recovery Copy. |
 | Show the microphone beside editable fields | Pause or resume the widget and recording. |
-| Transform position | Drag to set a position relative to the active text row; uncheck to lock it. |
+| Allow dragging | Drag to set a position relative to the active text row; uncheck to lock it. |
 | Reset position | Restore the default left-side placement. |
 | Start Violet when I sign in | Enable or disable per-user automatic startup. |
-| Quit Violet / release resources | Exit and release the resident speech model. |
+| Quit Violet | Exit and release the resident speech model. |
 
 Open the desktop or Start-menu shortcut for the control panel. You can pin it
 to your taskbar. Closing the panel leaves Violet in the tray.
 
 <p align="center"><img src="artifacts/violet-control-panel.png" alt="Violet control panel with model selection, pause, Transform, startup, and Quit controls" width="390"></p>
 
-The warm orchid gradient and compact microphone stay out of your way. The meter
+The floating microphone uses a charcoal surface and a lavender waveform. The meter
 shows nine small rounded dots while quiet, growing into thicker warm-violet bars
 when you speak. A sensitive visual level scale makes normal speech use more of
 the available height without changing the recorded audio.
@@ -131,7 +133,7 @@ private transcripts, credentials, and personal screenshots out of public issues.
 
 Want to share Violet? The [launch card](docs/images/violet-011-launch.png) and
 [editable SVG](docs/images/violet-011-launch.svg) are ready to use. Link people to
-the [official release](https://github.com/LeightonR/violet/releases/tag/v0.1.1).
+the [official release](https://github.com/LeightonR/violet/releases/tag/v0.2.0).
 
 ## License and acknowledgments
 

@@ -84,7 +84,7 @@ def visible_control_panel(pid: int) -> auto.Control | None:
         if not win32gui.IsWindowVisible(hwnd) or win32gui.GetWindowText(hwnd) != "Violet":
             continue
         panel = auto.ControlFromHandle(hwnd)
-        if panel.CheckBoxControl(Name="Transform position (drag the violet mic)").Exists(0, 0):
+        if panel.CheckBoxControl(Name="Allow dragging").Exists(0, 0):
             return panel
     return None
 
@@ -226,7 +226,7 @@ def main() -> int:
         assert panel_request.returncode == 0, panel_request.stderr
         panel = eventually(lambda: visible_control_panel(app_pid), "visible Transform panel")
         assert panel
-        transform = panel.CheckBoxControl(Name="Transform position (drag the violet mic)")
+        transform = panel.CheckBoxControl(Name="Allow dragging")
         transform.Click()
         eventually(lambda: visible_control_panel(app_pid) is None, "panel hidden for unobstructed drag")
         eventually(lambda: win32gui.IsWindowVisible(overlay_hwnd), "drag overlay")
@@ -242,7 +242,7 @@ def main() -> int:
         )
         assert panel_request.returncode == 0, panel_request.stderr
         panel = eventually(lambda: visible_control_panel(app_pid), "panel to lock Transform")
-        transform = panel.CheckBoxControl(Name="Transform position (drag the violet mic)")
+        transform = panel.CheckBoxControl(Name="Allow dragging")
         transform.Click()  # lock and persist the field-relative placement
         panel.ButtonControl(Name="Close panel").Click()
         eventually(lambda: visible_control_panel(app_pid) is None, "panel closed after locking")

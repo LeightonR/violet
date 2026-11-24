@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — Desktop dictation
+
+- Updated Windows browser target detection for hidden typing frames and editable search controls.
+- Redesigned the recording overlay, control panel and transcript recovery window.
+- Added a macOS and Linux source preview with local recording, transcription and clipboard output.
+- Updated the Windows dependency lock and package version metadata.
+
+See the [release notes](docs/releases/v0.2.0.md) for downloads and platform details.
+
 ## 0.1.1 â€” Tiny bubble. Big voice.
 
 - Adds an X that discards an active recording or pending result; the separate

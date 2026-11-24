@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .appearance import WINDOW_STYLE
 from .audio import AudioRecorder, list_input_devices
 from .config import Settings, load_settings, model_cache_dir, save_settings, settings_exist
 from .focus import EditableTarget, FocusService, retain_last_caret_anchor
@@ -278,39 +279,17 @@ class ControlPanel(QWidget):
         self.setObjectName("violetControlPanel")
         self.setWindowTitle("Violet")
         self.setWindowIcon(violet_icon())
-        self.setMinimumWidth(390)
-        self.setMaximumWidth(430)
-        self.setStyleSheet(
-            "QWidget#violetControlPanel {"
-            " background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,"
-            " stop: 0 #f8e8ff, stop: .46 #e6b6f2, stop: 1 #be83df);"
-            " color: #382047; }"
-            "QLabel#violetTitle { color: #42215c; font-size: 25px; font-weight: 700; }"
-            "QLabel#violetSubtitle { color: #68437a; font-size: 11px; }"
-            "QLabel#violetStatus { background: rgba(255,255,255,180); border: 1px solid #85d9e5;"
-            " border-radius: 10px; color: #3b2153; font-weight: 600; padding: 9px; }"
-            "QLabel#violetNote { color: #704062; font-size: 10px; }"
-            "QCheckBox { color: #3b2153; font-weight: 600; spacing: 9px; padding: 5px 0; }"
-            "QCheckBox::indicator { width: 17px; height: 17px; border: 1px solid #8955ad;"
-            " border-radius: 5px; background: #fff7ff; }"
-            "QCheckBox::indicator:checked { background: #704096; border-color: #50276d; }"
-            "QComboBox { background: rgba(255,255,255,200); border: 1px solid #8c5aad; border-radius: 8px;"
-            " color: #43215d; font-weight: 600; padding: 6px 9px; }"
-            "QPushButton { background: rgba(255,255,255,190); border: 1px solid #8c5aad;"
-            " border-radius: 10px; color: #43215d; font-weight: 600; padding: 8px 13px; }"
-            "QPushButton:hover { background: #fff8ff; border-color: #5dc7d7; }"
-            "QPushButton#violetQuit { background: #54266f; border-color: #3c174f; color: white; }"
-            "QPushButton#violetQuit:hover { background: #6b368a; }"
-        )
+        self.setMinimumWidth(440)
+        self.resize(460, 520)
+        self.setStyleSheet(WINDOW_STYLE)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 20, 22, 18)
-        layout.setSpacing(9)
+        layout.setContentsMargins(28, 22, 28, 20)
+        layout.setSpacing(8)
 
         title = QLabel("Violet")
-        title.setObjectName("violetTitle")
-        subtitle = QLabel("Local desktop dictation Â· CPU only Â· no transcript history")
-        subtitle.setObjectName("violetSubtitle")
-        subtitle.setWordWrap(True)
+        title.setObjectName("windowHeading")
+        subtitle = QLabel("On-device dictation")
+        subtitle.setObjectName("secondary")
         self._status = QLabel()
         self._status.setObjectName("violetStatus")
         self._status.setWordWrap(True)
@@ -327,16 +306,18 @@ class ControlPanel(QWidget):
         self._model_detail.setObjectName("violetNote")
         self._model_detail.setWordWrap(True)
         self._widget_enabled = QCheckBox("Show the microphone beside editable fields")
-        self._transform_enabled = QCheckBox("Transform position (drag the violet mic)")
+        self._transform_enabled = QCheckBox("Allow dragging")
+        self._transform_enabled.setAccessibleName("Allow dragging")
         reset_position = QPushButton("Reset position")
         reset_position.setObjectName("violetResetPosition")
         self._startup_enabled = QCheckBox("Start Violet when I sign in")
         self._note = QLabel()
         self._note.setObjectName("violetNote")
         self._note.setWordWrap(True)
-        quit_button = QPushButton("Quit Violet / release resources")
+        quit_button = QPushButton("Quit Violet")
         quit_button.setObjectName("violetQuit")
-        close_button = QPushButton("Close panel")
+        close_button = QPushButton("Done")
+        close_button.setObjectName("primary")
 
         self._widget_enabled.toggled.connect(self.widget_enabled_changed)
         self._transform_enabled.toggled.connect(self.transform_enabled_changed)
@@ -346,26 +327,52 @@ class ControlPanel(QWidget):
         self._download_model.clicked.connect(self.download_requested)
         quit_button.clicked.connect(self.quit_requested)
         close_button.clicked.connect(self.hide)
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
-        layout.addSpacing(4)
+        header = QHBoxLayout()
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(subtitle)
+        layout.addLayout(header)
         layout.addWidget(self._status)
-        layout.addWidget(self._hardware)
+        shortcut = QLabel("Start or finish dictation    Ctrl + Alt + Space")
+        shortcut.setObjectName("secondary")
+        layout.addWidget(shortcut)
+
+        def section(text):
+            layout.addSpacing(8)
+            label = QLabel(text)
+            label.setObjectName("sectionHeading")
+            layout.addWidget(label)
+            return label
+
+        model_label = section("Speech model")
+        model_label.setBuddy(self._model_choice)
+        self._model_choice.setAccessibleName("Speech model")
         layout.addWidget(self._model_choice)
-        layout.addWidget(self._download_model)
         layout.addWidget(self._model_detail)
-        layout.addSpacing(3)
+        layout.addWidget(self._download_model)
+        details = QPushButton("Show device details")
+        details.setCheckable(True)
+        details.setObjectName("textButton")
+        details.toggled.connect(self._hardware.setVisible)
+        details.toggled.connect(lambda shown: details.setText("Hide device details" if shown else "Show device details"))
+        layout.addWidget(details, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self._hardware)
+        self._hardware.hide()
+
+        section("Preferences")
         layout.addWidget(self._widget_enabled)
         transform_row = QHBoxLayout()
-        transform_row.setContentsMargins(0, 0, 0, 0)
         transform_row.addWidget(self._transform_enabled, 1)
         transform_row.addWidget(reset_position)
         layout.addLayout(transform_row)
         layout.addWidget(self._startup_enabled)
         layout.addWidget(self._note)
-        layout.addSpacing(4)
-        layout.addWidget(quit_button)
-        layout.addWidget(close_button)
+        layout.addStretch()
+        footer = QHBoxLayout()
+        footer.addWidget(quit_button)
+        footer.addStretch()
+        footer.addWidget(close_button)
+        layout.addLayout(footer)
 
     def _emit_selected_model(self, _index: int) -> None:
         model_id = self._model_choice.currentData()
@@ -406,6 +413,7 @@ class ControlPanel(QWidget):
             self._model_choice.setCurrentIndex(index)
         self._model_choice.setEnabled(model_state not in {"checking", "downloading", "loading"})
         self._model_choice.blockSignals(False)
+        self._download_model.setVisible(model_download_allowed or model_state in {"loading", "downloading"})
         self._download_model.setEnabled(model_download_allowed)
         button_text = {
             "checking": "Checking local modelâ€¦",
@@ -428,6 +436,7 @@ class ControlPanel(QWidget):
         self._transform_enabled.setEnabled(enabled)
         self._transform_enabled.blockSignals(False)
         self._note.setText(note)
+        self._note.setVisible(bool(note))
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         event.ignore()
@@ -512,7 +521,7 @@ class VioletController(QObject):
         if self._hotkey.registered:
             self._hotkey_action.setText("Ctrl+Alt+Space: ready")
         else:
-            self._hotkey_action.setText("Global hotkey unavailable â€” use the violet mic")
+            self._hotkey_action.setText("Global hotkey unavailable — use the violet mic")
         if demo_text is None:
             self._check_local_model()
         else:
@@ -521,9 +530,9 @@ class VioletController(QObject):
 
     def _setup_tray(self) -> None:
         self._tray = QSystemTrayIcon(violet_icon(), self._app)
-        self._tray.setToolTip("Violet â€” local dictation")
+        self._tray.setToolTip("Violet — local dictation")
         menu = QMenu()
-        self._model_action = QAction("Preparing local modelâ€¦", menu)
+        self._model_action = QAction("Preparing local model…", menu)
         self._model_action.setEnabled(False)
         panel_action = QAction("Control panel", menu)
         panel_action.triggered.connect(self.show_control_panel)
@@ -605,7 +614,7 @@ class VioletController(QObject):
         ram = profile.total_ram_gib
         ram_text = f"{ram:.0f} GiB RAM" if ram is not None else "RAM unavailable"
         isa = "AVX2" if profile.avx2 else "SSE4.1" if profile.sse41 else "ISA unavailable"
-        return f"Local profile: {cores} CPU cores Â· {ram_text} Â· {isa}. {self._recommendation.reason}"
+        return f"Local profile: {cores} CPU cores · {ram_text} · {isa}. {self._recommendation.reason}"
 
     def set_startup_enabled(self, enabled: bool) -> None:
         try:
@@ -744,7 +753,7 @@ class VioletController(QObject):
         if self._model_setup_worker is not None and self._model_setup_worker.isRunning():
             return
         self._model_state = "checking"
-        self._model_action.setText("Checking verified local modelâ€¦")
+        self._model_action.setText("Checking verified local model…")
         self._retry_action.setEnabled(False)
         self._refresh_panel()
         self._start_model_setup(allow_download=False)
@@ -821,7 +830,7 @@ class VioletController(QObject):
         if self._model_setup_worker is not None and self._model_setup_worker.isRunning():
             return
         self._model_state = "downloading"
-        self._model_action.setText(f"Downloading {self._selected_spec.model_id}â€¦")
+        self._model_action.setText(f"Downloading {self._selected_spec.model_id}…")
         self._retry_action.setEnabled(False)
         self._panel_note = "Downloading the selected local model. Violet will be ready to use offline afterward."
         self._refresh_panel()
@@ -849,7 +858,7 @@ class VioletController(QObject):
 
     def _start_worker(self, model_path: str) -> None:
         self._model_state = "loading"
-        self._model_action.setText("Preparing local modelâ€¦")
+        self._model_action.setText("Preparing local model…")
         self._retry_action.setEnabled(False)
         self._refresh_panel()
         worker = WhisperWorker(self._settings, model_path)

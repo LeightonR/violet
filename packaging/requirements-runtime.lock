@@ -1,14 +1,14 @@
-# Exact Windows x64 runtime resolution for Violet 0.1.1.
+# Exact Windows x64 runtime resolution for Violet 0.2.0.
 # Wheel hashes are generated into dist/dependency-manifest.json by Build-Release.ps1.
 anyio==4.15.1
-certifi==2026.7.22
+certifi==2026.10.18
 cffi==2.1.1
 click==8.5.0
 colorama==0.4.6
 comtypes==1.4.17
 ctranslate2==4.8.2
 faster-whisper==1.2.1
-filelock==4.0.5
+filelock==4.2.1
 flatbuffers==25.12.19
 fsspec==2026.9.0
 h11==0.16.0

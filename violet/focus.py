@@ -64,7 +64,12 @@ class EditableTarget:
 class FocusService:
     """Reads UIA structure only. It deliberately never reads a field's value."""
 
-    _supported_types = {auto.ControlType.EditControl, auto.ControlType.DocumentControl}
+    _supported_types = {
+        auto.ControlType.EditControl,
+        auto.ControlType.DocumentControl,
+        auto.ControlType.ComboBoxControl,
+    }
+    _visible_ancestor_limit = 12
 
     def snapshot(self) -> Optional[EditableTarget]:
         try:
@@ -76,17 +81,14 @@ class FocusService:
                 return None
             if control.ControlType not in self._supported_types:
                 return None
-            if not control.IsEnabled or control.IsOffscreen or control.IsPassword:
-                return None
-            if not control.IsKeyboardFocusable:
+            if not control.IsEnabled or control.IsPassword:
                 return None
             if self._is_read_only(control):
                 return None
             if not self._is_text_capable(control):
                 return None
-            bounds = control.BoundingRectangle
-            rect = FieldRect(bounds.left, bounds.top, bounds.right, bounds.bottom)
-            if rect.width < 2 or rect.height < 2:
+            rect = self._visible_target_rect(control)
+            if rect is None:
                 return None
             anchor_rect, anchor_is_caret = self._anchor_rect(control, rect)
             runtime_id = tuple(int(part) for part in control.GetRuntimeId())
@@ -137,6 +139,37 @@ class FocusService:
             pass
         return field_rect, False
 
+    @classmethod
+    def _visible_target_rect(cls, control: auto.Control) -> FieldRect | None:
+        """Return a visible rectangle for a focused editable surface.
+
+        Google Docs accepts typing through an intentionally hidden, focused
+        iframe.  Its UIA element is off-screen even though the user is editing
+        the visible canvas.  The hidden element remains the insertion identity,
+        while its nearest visible UIA ancestor supplies only Violet's placement
+        geometry.  A bounded ancestor walk avoids treating an arbitrary desktop
+        root as a text target.
+        """
+
+        candidate: object | None = control
+        for _ in range(cls._visible_ancestor_limit):
+            if candidate is None:
+                return None
+            try:
+                if not candidate.IsOffscreen:
+                    bounds = candidate.BoundingRectangle
+                    rect = FieldRect(bounds.left, bounds.top, bounds.right, bounds.bottom)
+                    if rect.width >= 2 and rect.height >= 2:
+                        return rect
+            except Exception:
+                # A browser can replace an accessibility node during layout.
+                return None
+            try:
+                candidate = candidate.GetParentControl()
+            except Exception:
+                return None
+        return None
+
     def hotkey_fallback_rect(self) -> Optional[FieldRect]:
         """Return a cursor anchor only for an unknown, non-protected focus.
 
@@ -170,13 +203,24 @@ class FocusService:
     @staticmethod
     def _is_text_capable(control: auto.Control) -> bool:
         # Edit controls normally expose ValuePattern. Document controls often use
-        # TextPattern (for example browser content-editable surfaces). Retrieving
-        # a pattern does not retrieve the user's text.
+        # TextPattern (for example browser content-editable surfaces). Browser
+        # search boxes can be exposed as editable ComboBoxes. Those are accepted
+        # only with a writable ValuePattern, which excludes selection-only and
+        # read-only dropdowns. Retrieving a pattern does not retrieve user text.
         try:
-            if control.GetValuePattern() is not None:
+            value_pattern = control.GetValuePattern()
+            if control.ControlType == auto.ControlType.ComboBoxControl:
+                return bool(value_pattern is not None and not value_pattern.IsReadOnly)
+            if value_pattern is not None:
                 return True
             getter = getattr(control, "GetTextPattern", None)
-            return bool(getter and getter() is not None)
+            if getter and getter() is not None:
+                return True
+            # Some browser-backed editors expose only TextPattern2.  In
+            # particular, that pattern provides the caret geometry used by
+            # ``active_line_rect`` without retrieving document contents.
+            get_pattern = getattr(control, "GetPattern", None)
+            return bool(get_pattern and get_pattern(auto.PatternId.TextPattern2) is not None)
         except Exception:
             return False
 

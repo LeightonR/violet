@@ -10,6 +10,7 @@ from PySide6.QtCore import QThread, Signal
 
 from .audio import contains_voice_energy
 from .config import Settings
+from .formatting import normalize_transcript
 
 
 class WhisperWorker(QThread):
@@ -83,7 +84,7 @@ class WhisperWorker(QThread):
                     vad_parameters={"min_silence_duration_ms": 500},
                     condition_on_previous_text=False,
                 )
-                text = "".join(segment.text for segment in segments).strip()
+                text = normalize_transcript("".join(segment.text for segment in segments))
                 self.transcript_ready.emit(request_id, text)
             except Exception as error:
                 self.transcription_failed.emit(request_id, f"Transcription failed: {error}")
